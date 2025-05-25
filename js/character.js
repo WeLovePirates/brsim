@@ -40,6 +40,10 @@ class Character {
         this.isDodging = false;
         this.dodgeDirectionAngle = 0;
         this.lastDodgeDirectionChangeTime = 0;
+        // Added properties for Ghost abilities
+        this.isPhasing = false;
+        this.isInvisible = false;
+        this.originalAlpha = 1.0; // To store original drawing alpha
 
         this.kills = 0;
         this.damageDealt = 0;
@@ -80,40 +84,10 @@ class Character {
         // Use global LOW_HEALTH_THRESHOLD and ALL_LOW_HEALTH_RUSH_CHANCE
         const allLowHealth = aliveCharacters.every(char => char.health <= char.maxHealth * LOW_HEALTH_THRESHOLD);
 
-        if (allLowHealth && nearestOpponent && Math.random() < ALL_LOW_HEALTH_RUSH_CHANCE) {
-            const targetX = nearestOpponent.x + nearestOpponent.width / 2;
-            const targetY = nearestOpponent.y + nearestOpponent.height / 2;
-            const currentX = this.x + this.width / 2;
-            const currentY = this.y + this.height / 2;
-
-            const angleToTarget = Math.atan2(targetY - currentY, targetX - currentX);
-
-            // Use global ORIGINAL_SPEED_MAGNITUDE
-            const rushSpeed = ORIGINAL_SPEED_MAGNITUDE * this.speed * CHARACTER_SCALE_FACTOR * 1.2;
-            this.dx = Math.cos(angleToTarget) * rushSpeed;
-            this.dy = Math.sin(angleToTarget) * rushSpeed;
-            appliedMovement = true;
-            this.isDodging = false;
-        } else if (this.health <= this.maxHealth * LOW_HEALTH_THRESHOLD && Math.random() < DODGE_CHANCE) {
-            if (!this.isDodging || (currentTime - this.lastDodgeDirectionChangeTime > DODGE_DIRECTION_CHANGE_INTERVAL)) {
-                this.isDodging = true;
-                this.dodgeDirectionAngle = Math.random() * Math.PI * 2;
-                this.lastDodgeDirectionChangeTime = currentTime;
-            }
-
-            const dodgeSpeed = ORIGINAL_SPEED_MAGNITUDE * this.speed * CHARACTER_SCALE_FACTOR * DODGE_SPEED_MULTIPLIER;
-            this.dx = Math.cos(this.dodgeDirectionAngle) * dodgeSpeed;
-            this.dy = Math.sin(this.dodgeDirectionAngle) * dodgeSpeed;
-            appliedMovement = true;
-        } else {
-            this.isDodging = false;
-        }
-
-        if (!appliedMovement) {
-            const SEEK_CHANCE = 0.008;
-            const RANDOM_DIRECTION_CHANGE_CHANCE = 0.005;
-
-            if (nearestOpponent && Math.random() < SEEK_CHANCE) {
+        // Apply movement logic only if not phasing (phasing might have its own movement logic or just allow free movement)
+        // For now, let's assume phasing just makes them ignore collisions/damage, not change movement pattern significantly
+        if (!this.isPhasing) {
+             if (allLowHealth && nearestOpponent && Math.random() < ALL_LOW_HEALTH_RUSH_CHANCE) {
                 const targetX = nearestOpponent.x + nearestOpponent.width / 2;
                 const targetY = nearestOpponent.y + nearestOpponent.height / 2;
                 const currentX = this.x + this.width / 2;
@@ -121,35 +95,83 @@ class Character {
 
                 const angleToTarget = Math.atan2(targetY - currentY, targetX - currentX);
 
-                const newSpeedMagnitude = ORIGINAL_SPEED_MAGNITUDE * this.speed * CHARACTER_SCALE_FACTOR;
-                this.dx = Math.cos(angleToTarget) * newSpeedMagnitude;
-                this.dy = Math.sin(angleToTarget) * newSpeedMagnitude;
+                // Use global ORIGINAL_SPEED_MAGNITUDE
+                const rushSpeed = ORIGINAL_SPEED_MAGNITUDE * this.speed * CHARACTER_SCALE_FACTOR * 1.2;
+                this.dx = Math.cos(angleToTarget) * rushSpeed;
+                this.dy = Math.sin(angleToTarget) * rushSpeed;
+                appliedMovement = true;
+                this.isDodging = false;
+            } else if (this.health <= this.maxHealth * LOW_HEALTH_THRESHOLD && Math.random() < DODGE_CHANCE) {
+                // Add boost from Smoke Bomb or Invisibility if active
+                const currentDodgeChance = DODGE_CHANCE + (this.dodgeChanceBoost || 0) + (this.isInvisible ? INVISIBILITY_DODGE_BOOST : 0);
 
-            } else if (Math.random() < RANDOM_DIRECTION_CHANGE_CHANCE) {
-                this.dx = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * this.speed * CHARACTER_SCALE_FACTOR;
-                this.dy = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * this.speed * CHARACTER_SCALE_FACTOR;
-                const currentSpeed = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
-                const minSpeed = 1 * this.speed * CHARACTER_SCALE_FACTOR;
-                if (currentSpeed < minSpeed) {
-                    const angle = Math.atan2(this.dy, this.dx);
-                    this.dx = Math.cos(angle) * minSpeed;
-                    this.dy = Math.sin(angle) * minSpeed;
+                if (Math.random() < currentDodgeChance) {
+                    if (!this.isDodging || (currentTime - this.lastDodgeDirectionChangeTime > DODGE_DIRECTION_CHANGE_INTERVAL)) {
+                        this.isDodging = true;
+                        this.dodgeDirectionAngle = Math.random() * Math.PI * 2;
+                        this.lastDodgeDirectionChangeTime = currentTime;
+                    }
+
+                    const dodgeSpeed = ORIGINAL_SPEED_MAGNITUDE * this.speed * CHARACTER_SCALE_FACTOR * DODGE_SPEED_MULTIPLIER;
+                    this.dx = Math.cos(this.dodgeDirectionAngle) * dodgeSpeed;
+                    this.dy = Math.sin(this.dodgeDirectionAngle) * dodgeSpeed;
+                    appliedMovement = true;
+                } else {
+                    this.isDodging = false;
+                }
+            } else {
+                this.isDodging = false;
+            }
+
+            if (!appliedMovement) {
+                const SEEK_CHANCE = 0.008;
+                const RANDOM_DIRECTION_CHANGE_CHANCE = 0.005;
+
+                if (nearestOpponent && Math.random() < SEEK_CHANCE) {
+                    const targetX = nearestOpponent.x + nearestOpponent.width / 2;
+                    const targetY = nearestOpponent.y + nearestOpponent.height / 2;
+                    const currentX = this.x + this.width / 2;
+                    const currentY = this.y + this.height / 2;
+
+                    const angleToTarget = Math.atan2(targetY - currentY, targetX - currentX);
+
+                    const newSpeedMagnitude = ORIGINAL_SPEED_MAGNITUDE * this.speed * CHARACTER_SCALE_FACTOR;
+                    this.dx = Math.cos(angleToTarget) * newSpeedMagnitude;
+                    this.dy = Math.sin(angleToTarget) * newSpeedMagnitude;
+
+                } else if (Math.random() < RANDOM_DIRECTION_CHANGE_CHANCE) {
+                    this.dx = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * this.speed * CHARACTER_SCALE_FACTOR;
+                    this.dy = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * this.speed * CHARACTER_SCALE_FACTOR;
+                    const currentSpeed = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
+                    const minSpeed = 1 * this.speed * CHARACTER_SCALE_FACTOR;
+                    if (currentSpeed < minSpeed) {
+                        const angle = Math.atan2(this.dy, this.dx);
+                        this.dx = Math.cos(angle) * minSpeed;
+                        this.dy = Math.sin(angle) * minSpeed;
+                    }
                 }
             }
         }
 
+
         this.x += this.dx;
         this.y += this.dy;
 
+        // Boundary checks - Phasing characters might ignore these?
+        // Let's assume phasing characters still stay within bounds but don't bounce
         if (this.x + this.width > this.canvas.width || this.x < 0) {
-            this.dx *= -1;
+            if (!this.isPhasing) {
+                this.dx *= -1;
+            }
             this.x = Math.max(0, Math.min(this.x, this.canvas.width - this.width));
             if (this.isDodging) {
                 this.lastDodgeDirectionChangeTime = 0;
             }
         }
         if (this.y + this.height > this.canvas.height || this.y < 0) {
-            this.dy *= -1;
+            if (!this.isPhasing) {
+                this.dy *= -1;
+            }
             this.y = Math.max(0, Math.min(this.y, this.canvas.height - this.height));
             if (this.isDodging) {
                 this.lastDodgeDirectionChangeTime = 0;
@@ -186,7 +208,8 @@ class Character {
 
                         // Check for collision with other characters using a for...of loop for early exit
                         for (const target of characters) {
-                            if (target !== this && target.isAlive) {
+                            // Add check: Projectile does not hit phasing characters
+                            if (target !== this && target.isAlive && !target.isPhasing) {
                                 // Calculate the beam's current position for collision
                                 const beamCurrentX = this.moveEffect.x;
                                 const beamCurrentY = this.moveEffect.y;
@@ -284,18 +307,79 @@ class Character {
                         this.dy = Math.sin(currentAngle) * newSpeedMagnitude;
                     }
                     break;
+                case 'boo': // Ghost's special move
+                    if (this.moveEffect && this.moveEffect.type === 'boo_effect') {
+                        if (!this.moveEffect.appliedDamage) { // Apply damage once
+                            characters.forEach(target => {
+                                if (target !== this && target.isAlive && !target.isPhasing && GameUtils.checkDistance(this, target) < this.moveEffect.radius) {
+                                    const damage = GHOST_BOO_DAMAGE; // Use the new constant for damage
+                                    target.takeDamage(damage, this.attack, this.name, characters);
+                                    this.damageDealt += damage;
+                                }
+                            });
+                            this.moveEffect.appliedDamage = true;
+                        }
+                        this.moveEffect.duration--;
+                        if (this.moveEffect.duration <= 0) {
+                            this.moveActive = false;
+                            this.moveEffect = null;
+                        }
+                    }
+                    break;
             }
         }
 
+        // Check if secondary ability is active and effect exists before processing
         if (this.secondaryAbilityActive && this.secondaryAbilityEffect) {
             // Only decrease duration for abilities that have a duration
             this.secondaryAbilityEffect.duration--;
             if (this.secondaryAbilityEffect.duration <= 0) {
+                // Store the type before resetting the effect
+                const abilityType = this.secondaryAbilityEffect.type;
+
+                // Reset effects when duration ends
                 this.secondaryAbilityActive = false;
                 this.secondaryAbilityEffect = null;
-                this.isBlockingShuriken = false;
+
+                // Reset flags and stats based on the ability type that just ended
+                switch (abilityType) {
+                    case 'magic_shield':
+                        this.isBlockingShuriken = false; // Reset shuriken block
+                        break;
+                    case 'phase':
+                        this.isPhasing = false; // Reset phasing
+                        // Speed reset for phase is handled below with originalSpeed
+                        break;
+                    case 'invisibility':
+                        this.isInvisible = false; // Reset invisibility
+                        this.ctx.globalAlpha = this.originalAlpha; // Restore original alpha
+                        // Dodge chance boost from Invisibility is tied to isInvisible flag, no separate reset needed
+                        break;
+                    case 'iron_skin':
+                        // Defense reset handled below with originalDefense
+                        break;
+                    case 'fortify':
+                        // Defense reset handled below with originalDefense
+                        break;
+                    case 'spur_of_moment':
+                    case 'adrenaline_shot':
+                        // Speed reset handled below with originalSpeed
+                        break;
+                    case 'smoke_bomb':
+                        this.dodgeChanceBoost = 0; // Reset dodge chance boost from Smoke Bomb
+                        break;
+                    // Slippery floor speed reset is handled by the timeout on the target,
+                    // which is less ideal but matches the current pattern.
+                    // Static field has no character-specific stats to reset.
+                }
+
+                // Reset stats that might have been boosted/reduced (if they weren't reset above)
+                // This assumes originalSpeed and originalDefense store the values *before* any secondary ability buffs.
+                // If multiple abilities could stack speed/defense, this reset logic would need refinement.
                 this.speed = this.originalSpeed;
                 this.defense = this.originalDefense;
+
+                // Update speed vector if speed changed
                 const newSpeedMagnitude = ORIGINAL_SPEED_MAGNITUDE * this.speed * CHARACTER_SCALE_FACTOR;
                 const currentAngle = Math.atan2(this.dy, this.dx);
                 this.dx = Math.cos(currentAngle) * newSpeedMagnitude;
@@ -307,7 +391,20 @@ class Character {
     draw(CHARACTER_SCALE_FACTOR) {
         if (!this.isAlive) return;
 
+        // Apply transparency if phasing or invisible
+        if (this.isPhasing) {
+            this.ctx.globalAlpha = 0.5; // Semi-transparent when phasing
+        } else if (this.isInvisible) {
+             this.ctx.globalAlpha = 0.3; // More transparent when invisible
+        } else {
+            this.ctx.globalAlpha = this.originalAlpha; // Default alpha
+        }
+
+
         this.ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+
+        // Reset alpha for drawing UI elements like health bar and name
+        this.ctx.globalAlpha = this.originalAlpha;
 
         const healthBarWidth = this.width;
         const healthBarHeight = 5 * CHARACTER_SCALE_FACTOR;
@@ -326,13 +423,17 @@ class Character {
         this.ctx.textBaseline = 'alphabetic';
         this.ctx.fillText(this.name, this.x + this.width / 2, this.y - (5 * CHARACTER_SCALE_FACTOR));
 
+        // Draw move effects
         if (this.moveActive && this.moveEffect) {
+            // Restore alpha for move effects if they have their own alpha
+            this.ctx.globalAlpha = this.originalAlpha; // Start with default
+
             if (this.moveType === 'confetti') {
                 this.ctx.save();
-                this.ctx.globalAlpha = 0.6;
+                this.ctx.globalAlpha = 0.6; // Confetti specific alpha
                 this.moveEffect.particles.forEach(p => {
                     this.ctx.fillStyle = p.color;
-                    this.ctx.globalAlpha = p.alpha;
+                    this.ctx.globalAlpha = p.alpha; // Particle specific alpha
                     this.ctx.fillRect(p.x, p.y, 8 * CHARACTER_SCALE_FACTOR, 8 * CHARACTER_SCALE_FACTOR);
                 });
                 this.ctx.restore();
@@ -371,19 +472,19 @@ class Character {
                 this.ctx.stroke();
                 this.ctx.lineWidth = 1;
             } else if (this.moveType === 'patch') {
-                this.ctx.globalAlpha = this.moveEffect.alpha;
+                this.ctx.globalAlpha = this.moveEffect.alpha; // Patch specific alpha
                 this.ctx.fillStyle = 'lightgreen';
                 this.ctx.font = `${30 * CHARACTER_SCALE_FACTOR}px Inter`;
                 this.ctx.textAlign = 'center';
                 this.ctx.fillText('+', this.x + this.width / 2, this.y + this.height / 2 + 5 * CHARACTER_SCALE_FACTOR);
-                this.ctx.globalAlpha = 1;
+                this.ctx.globalAlpha = this.originalAlpha; // Restore default alpha
             } else if (this.moveType === 'shuriken') {
                 this.ctx.fillStyle = 'gray';
                 this.ctx.beginPath();
                 this.ctx.arc(this.moveEffect.x, this.moveEffect.y, 8 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
                 this.ctx.fill();
             } else if (this.moveType === 'fireball') {
-                this.ctx.fillStyle = `rgba(255, 100, 0, ${this.moveEffect.alpha})`;
+                this.ctx.fillStyle = `rgba(255, 100, 0, ${this.moveEffect.alpha})`; // Fireball specific alpha
                 this.ctx.beginPath();
                 this.ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.moveEffect.radius, 0, Math.PI * 2);
                 this.ctx.fill();
@@ -393,14 +494,29 @@ class Character {
                 this.ctx.beginPath();
                 this.ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.width / 2 + 5 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
                 this.ctx.stroke();
+            } else if (this.moveType === 'boo') {
+                if (this.moveEffect && this.moveEffect.type === 'boo_effect' && this.moveEffect.duration > 0) {
+                    this.ctx.save();
+                    this.ctx.globalAlpha = 0.4 * (this.moveEffect.duration / 30); // Fading effect
+                    this.ctx.fillStyle = 'rgba(200, 200, 255, 0.5)'; // Ghostly color
+                    this.ctx.beginPath();
+                    this.ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.moveEffect.radius, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.restore();
+                }
             }
         }
 
+        // Draw secondary ability effects
         if (this.secondaryAbilityActive && this.secondaryAbilityEffect) {
             const centerX = this.x + this.width / 2;
             const centerY = this.y + this.height / 2;
             // Use global SECONDARY_ABILITY_DURATION_FRAMES
-            const currentAlpha = (this.secondaryAbilityEffect.duration / SECONDARY_ABILITY_DURATION_FRAMES) * 0.7;
+            // Ensure SECONDARY_ABILITY_DURATION_FRAMES is not zero to avoid division by zero
+            const durationRatio = SECONDARY_ABILITY_DURATION_FRAMES > 0 ?
+                                  this.secondaryAbilityEffect.duration / SECONDARY_ABILITY_DURATION_FRAMES : 0;
+            const currentAlpha = durationRatio * 0.7;
+
 
             switch (this.secondaryAbilityEffect.type) {
                 case 'slippery_floor':
@@ -454,8 +570,20 @@ class Character {
                     this.ctx.rect(this.x - 5 * CHARACTER_SCALE_FACTOR, this.y - 5 * CHARACTER_SCALE_FACTOR, this.width + 10 * CHARACTER_SCALE_FACTOR, this.height + 10 * CHARACTER_SCALE_FACTOR);
                     this.ctx.stroke();
                     break;
+                 case 'phase': // Visual for Phase
+                    this.ctx.strokeStyle = `rgba(150, 0, 255, ${currentAlpha})`; // Purple outline
+                    this.ctx.lineWidth = 4 * CHARACTER_SCALE_FACTOR;
+                    this.ctx.beginPath();
+                    this.ctx.arc(centerX, centerY, this.width / 2 + 5 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
+                    this.ctx.stroke();
+                    break;
+                 case 'invisibility': // Visual for Invisibility (optional, transparency is the main effect)
+                    // Maybe a faint shimmer? For now, transparency is enough.
+                    break;
             }
         }
+         // Ensure alpha is reset after drawing everything
+        this.ctx.globalAlpha = this.originalAlpha;
     }
 
     takeDamage(baseAmount, attackerAttack, attackerName, allCharacters) {
@@ -463,6 +591,13 @@ class Character {
         // Use global HIT_COOLDOWN and GameUtils.displayMessage
         if (this.lastHitTime[attackerName] && (currentTime - this.lastHitTime[attackerName] < HIT_COOLDOWN)) {
             return;
+        }
+
+        // Add check: Phasing characters take no damage
+        if (this.isPhasing) {
+             GameUtils.displayMessage(`${this.name} phased through ${attackerName}'s attack!`);
+             this.lastHitTime[attackerName] = currentTime; // Still apply cooldown to prevent spam messages
+             return;
         }
 
         let effectiveDamage = Math.max(1, baseAmount + attackerAttack * 0.5 - this.defense * 0.5);
@@ -475,6 +610,9 @@ class Character {
                 effectiveDamage *= 0.6;
             } else if (this.secondaryAbilityEffect.type === 'fortify') {
                 effectiveDamage *= 0.4;
+            } else if (this.secondaryAbilityEffect.type === 'invisibility') {
+                 // Use global constant INVISIBILITY_DAMAGE_REDUCTION
+                 effectiveDamage *= INVISIBILITY_DAMAGE_REDUCTION; // Reduce damage when invisible
             }
         }
 
@@ -502,6 +640,8 @@ class Character {
     }
 
     useSpecialMove(characters, CHARACTER_SCALE_FACTOR) {
+        // Add check: Cannot use special move while phasing? Or maybe only certain moves?
+        // Let's allow it for now, but it's a design choice.
         if (Math.random() < 0.02) {
             this.lastMoveTime = Date.now();
             this.moveActive = true;
@@ -535,7 +675,8 @@ class Character {
                         });
                     }
                     characters.forEach(target => {
-                        if (target !== this && target.isAlive && GameUtils.checkDistance(this, target) < this.width * 2.0) {
+                        // Add check: Confetti doesn't affect phasing characters
+                        if (target !== this && target.isAlive && !target.isPhasing && GameUtils.checkDistance(this, target) < this.width * 2.0) {
                             const damage = 15;
                             target.takeDamage(damage, this.attack, this.name, characters);
                             this.damageDealt += damage;
@@ -558,7 +699,8 @@ class Character {
                     this.moveActive = true;
                     const reach = this.width * 1.5;
                     characters.forEach(target => {
-                        if (target !== this && target.isAlive) {
+                        // Add check: Baguette doesn't affect phasing characters
+                        if (target !== this && target.isAlive && !target.isPhasing) {
                             const dist = GameUtils.checkDistance(this, target);
                             if (dist < reach + target.width / 2) {
                                 const damage = 20;
@@ -597,7 +739,8 @@ class Character {
                     this.moveEffect = { radius: 10 * CHARACTER_SCALE_FACTOR };
                     this.moveActive = true;
                     characters.forEach(target => {
-                        if (target !== this && target.isAlive && GameUtils.checkDistance(this, target) < 80 * CHARACTER_SCALE_FACTOR) {
+                        // Add check: Static Shock doesn't affect phasing characters
+                        if (target !== this && target.isAlive && !target.isPhasing && GameUtils.checkDistance(this, target) < 80 * CHARACTER_SCALE_FACTOR) {
                             const damage = 10;
                             target.takeDamage(damage, this.attack, this.name, characters);
                             this.damageDealt += damage;
@@ -631,7 +774,8 @@ class Character {
                         const currentCharacterForPatch = this;
 
                         characters.forEach(otherChar => {
-                            if (otherChar !== currentCharacterForPatch && otherChar.isAlive) {
+                            // Add check: Patch doesn't accidentally heal phasing characters
+                            if (otherChar !== currentCharacterForPatch && otherChar.isAlive && !otherChar.isPhasing) {
                                 const dist = GameUtils.checkDistance(currentCharacterForPatch, otherChar);
                                 if (dist < minDistanceForPatch) {
                                     minDistanceForPatch = dist;
@@ -662,7 +806,8 @@ class Character {
                         };
                         GameUtils.displayMessage(`${this.name} threw a Shuriken!`);
                         GameUtils.playHitSound();
-                        if (GameUtils.checkDistance(this, nearestOpponent) < this.width * 1.5 && !nearestOpponent.isBlockingShuriken) {
+                        // Add check: Shuriken doesn't hit phasing characters
+                        if (GameUtils.checkDistance(this, nearestOpponent) < this.width * 1.5 && !nearestOpponent.isBlockingShuriken && !nearestOpponent.isPhasing) {
                             const damage = 25;
                             nearestOpponent.takeDamage(damage, this.attack, this.name, characters);
                             this.damageDealt += damage;
@@ -680,7 +825,8 @@ class Character {
                         GameUtils.displayMessage(`${this.name} cast Fireball!`);
                         GameUtils.playHitSound();
                         characters.forEach(target => {
-                            if (target !== this && target.isAlive && GameUtils.checkDistance(this, target) < 100 * CHARACTER_SCALE_FACTOR) {
+                            // Add check: Fireball doesn't affect phasing characters
+                            if (target !== this && target.isAlive && !target.isPhasing && GameUtils.checkDistance(this, target) < 100 * CHARACTER_SCALE_FACTOR) {
                                 const damage = 35;
                                 target.takeDamage(damage, this.attack, this.name, characters);
                                 this.damageDealt += damage;
@@ -702,23 +848,41 @@ class Character {
                         this.moveEffect = null;
                     }
                     break;
+                case 'boo': // Ghost's new special move
+                    this.moveEffect = {
+                        type: 'boo_effect',
+                        radius: this.width * 2.0, // Area of effect
+                        duration: 30, // Visual effect duration in frames
+                        appliedDamage: false // To ensure damage is applied only once
+                    };
+                    GameUtils.displayMessage(`${this.name} lets out a spectral cry!`);
+                    GameUtils.playHitSound();
+                    break;
             }
         }
     }
 
     useSecondaryAbility(characters, CHARACTER_SCALE_FACTOR) {
+        // Add check: Cannot use secondary ability if one is already active
+        if (this.secondaryAbilityActive) {
+            return;
+        }
+
         if (Math.random() < 0.015) {
             this.lastSecondaryAbilityTime = Date.now();
             this.secondaryAbilityActive = true;
-            this.isBlockingShuriken = true;
+            // isBlockingShuriken is specific to Magic Shield, move it inside the switch
+            // this.isBlockingShuriken = true;
 
             switch (this.secondaryAbilityType) {
                 case 'slippery_floor':
                     this.secondaryAbilityEffect = { type: 'slippery_floor', radius: this.width * 2.5, duration: SECONDARY_ABILITY_DURATION_FRAMES };
                     GameUtils.displayMessage(`${this.name} used Slippery Floor!`);
                     characters.forEach(target => {
-                        if (target !== this && target.isAlive && GameUtils.checkDistance(this, target) < this.secondaryAbilityEffect.radius) {
-                            if (!target.originalSpeedForSecondaryAbility) {
+                        // Add check: Slippery Floor doesn't affect phasing characters
+                        if (target !== this && target.isAlive && !target.isPhasing && GameUtils.checkDistance(this, target) < this.secondaryAbilityEffect.radius) {
+                            // Store original speed on the target if not already stored
+                            if (target.originalSpeedForSecondaryAbility === undefined) {
                                 target.originalSpeedForSecondaryAbility = target.speed;
                             }
                             target.speed *= 0.5;
@@ -726,8 +890,17 @@ class Character {
                             const currentAngle = Math.atan2(target.dy, target.dx);
                             target.dx = Math.cos(currentAngle) * newSpeedMagnitude;
                             target.dy = Math.sin(currentAngle) * newSpeedMagnitude;
+                            // The timeout logic should ideally be handled by the duration countdown in update,
+                            // but keeping the existing pattern for now. Need to ensure cleanup happens correctly.
+                            // A better approach would be to store affected characters and revert them when the ability ends.
+                            // For simplicity, keeping the timeout but noting it might be less robust.
                             setTimeout(() => {
-                                if (target.originalSpeedForSecondaryAbility) {
+                                // Only revert if the ability is still active on the target (check duration or a flag)
+                                // This timeout approach is problematic if the target gets hit by another slippery floor
+                                // or if the ability ends early for the caster but not the target.
+                                // A more robust solution would involve tracking effects on targets.
+                                // For now, we'll just revert if the original speed is still stored.
+                                if (target.originalSpeedForSecondaryAbility !== undefined) {
                                     target.speed = target.originalSpeedForSecondaryAbility;
                                     delete target.originalSpeedForSecondaryAbility;
                                     const revertedSpeedMagnitude = ORIGINAL_SPEED_MAGNITUDE * target.speed * CHARACTER_SCALE_FACTOR;
@@ -756,6 +929,7 @@ class Character {
                 case 'static_field':
                     this.secondaryAbilityEffect = { type: 'static_field', radius: this.width * 1.5, duration: SECONDARY_ABILITY_DURATION_FRAMES, tickDamage: 0.5 };
                     GameUtils.displayMessage(`${this.name} created a Static Field!`);
+                    // Damage application for Static Field is handled in main.js gameLoop
                     break;
                 case 'adrenaline_shot':
                     this.secondaryAbilityEffect = { type: 'adrenaline_shot', duration: SECONDARY_ABILITY_DURATION_FRAMES };
@@ -769,13 +943,14 @@ class Character {
                 case 'smoke_bomb':
                     this.secondaryAbilityEffect = { type: 'smoke_bomb', radius: this.width * 2, duration: SECONDARY_ABILITY_DURATION_FRAMES };
                     GameUtils.displayMessage(`${this.name} deployed a Smoke Bomb!`);
-                    this.dodgeChanceBoost = 0.5;
-                    setTimeout(() => {
-                        this.dodgeChanceBoost = 0;
-                    }, SECONDARY_ABILITY_DURATION_FRAMES * (1000/60));
+                    // Dodge chance boost is applied in the update method's dodge logic
+                    this.dodgeChanceBoost = 0.5; // Example boost value
+                    // The timeout logic should ideally be handled by the duration countdown in update
+                    // setTimeout(() => { this.dodgeChanceBoost = 0; }, SECONDARY_ABILITY_DURATION_FRAMES * (1000/60)); // Removed timeout, handled by duration
                     break;
                 case 'magic_shield':
                     this.secondaryAbilityEffect = { type: 'magic_shield', duration: SECONDARY_ABILITY_DURATION_FRAMES };
+                    this.isBlockingShuriken = true; // Enable shuriken block
                     GameUtils.displayMessage(`${this.name} cast Magic Shield!`);
                     break;
                 case 'fortify':
@@ -783,8 +958,26 @@ class Character {
                     this.defense *= 2.0;
                     GameUtils.displayMessage(`${this.name} fortified themselves!`);
                     break;
+                case 'phase': // New Phase ability
+                    this.secondaryAbilityEffect = { type: 'phase', duration: SECONDARY_ABILITY_DURATION_FRAMES };
+                    this.isPhasing = true; // Enable phasing
+                    // Phasing characters might move faster or ignore collision physics (handled in update/main.js)
+                    // Let's add a temporary speed boost during phase
+                    this.speed *= 1.5; // Example speed boost
+                    const currentAnglePhase = Math.atan2(this.dy, this.dx);
+                    const newSpeedMagnitudePhase = ORIGINAL_SPEED_MAGNITUDE * this.speed * CHARACTER_SCALE_FACTOR;
+                    this.dx = Math.cos(currentAnglePhase) * newSpeedMagnitudePhase;
+                    this.dy = Math.sin(currentAnglePhase) * newSpeedMagnitudePhase;
+                    GameUtils.displayMessage(`${this.name} is phasing!`);
+                    break;
+                case 'invisibility': // New Invisibility ability
+                    this.secondaryAbilityEffect = { type: 'invisibility', duration: SECONDARY_ABILITY_DURATION_FRAMES };
+                    this.isInvisible = true; // Enable invisibility
+                    // Invisibility effect (increased dodge, reduced damage) is handled in update/takeDamage
+                    GameUtils.displayMessage(`${this.name} turned invisible!`);
+                    break;
             }
-            GameUtils.playHitSound();
+            GameUtils.playHitSound(); // Play a sound for ability activation
         }
     }
 }

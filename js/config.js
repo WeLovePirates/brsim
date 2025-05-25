@@ -8,9 +8,8 @@ const INITIAL_HEALTH = 96;
 const BASE_COLLISION_DAMAGE = 5;
 const HIT_COOLDOWN = 500;
 const MOVE_COOLDOWN = 2000;
-// Changed MEDIC_PATCH_COOLDOWN to 7000 (7 seconds)
-const MEDIC_PATCH_COOLDOWN = 7000; // Medic heal cooldown in milliseconds (7 seconds)
-const SECONDARY_ABILITY_DURATION_FRAMES = 180; // ~3 seconds
+const MEDIC_PATCH_COOLDOWN = 7000;
+const SECONDARY_ABILITY_DURATION_FRAMES = 180;
 
 // Low health escape behavior
 const LOW_HEALTH_THRESHOLD = 0.3; // 30% of max health
@@ -28,7 +27,10 @@ const SOUND_COOLDOWN = 100; // Minimum time between sounds in milliseconds
 // New: Quick Draw hit chance
 const QUICKDRAW_HIT_CHANCE = 0.15; // 15% chance for Galloner's Quick Draw to hit
 
-// Removed BITE_IMAGE_URL as bite animation is now purely programmatic.
+// Ghost specific buffs
+const INVISIBILITY_DAMAGE_REDUCTION = 0.5; // Buffed: Character takes 50% of normal damage (50% reduction)
+const INVISIBILITY_DODGE_BOOST = 0.3;    // Buffed: 30% additive boost to dodge chance
+const GHOST_BOO_DAMAGE = 25; // New constant for Ghost's Boo move damage
 
 const IMAGE_SOURCES = [
     { name: 'Clown', url: './sprites/clown.png', move: 'confetti', attack: 8, defense: 8, speed: 1.2,
@@ -47,4 +49,6 @@ const IMAGE_SOURCES = [
       secondaryAbility: 'magic_shield', secondaryAbilityCooldown: 10000 },
     { name: 'Tank', url: './sprites/tank.png', move: 'charge', attack: 9, defense: 15, speed: 0.7,
       secondaryAbility: 'fortify', secondaryAbilityCooldown: 11000 },
+    { name: 'Ghost', url: './sprites/ghost.png', move: 'boo', attack: 15, defense: 3, speed: 1.8,
+      secondaryAbility: 'invisibility', secondaryAbilityCooldown: 10000 }, // Buffed: Cooldown reduced
 ];
