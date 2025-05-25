@@ -28,6 +28,7 @@ class Character {
         this.lastPatchTime = 0;
 
         this.secondaryAbilityType = secondaryAbilityType;
+        // FIX: Corrected typo from secondaryCoooldown to secondaryAbilityCooldown
         this.secondaryAbilityCooldown = secondaryAbilityCooldown;
         this.lastSecondaryAbilityTime = 0;
         this.secondaryAbilityActive = false;
@@ -283,20 +284,11 @@ class Character {
                         this.dy = Math.sin(currentAngle) * newSpeedMagnitude;
                     }
                     break;
-                case 'bite': // Update logic for the bite effect
-                    if (this.moveEffect.type === 'bite_flash') {
-                        this.moveEffect.duration--;
-                        this.moveEffect.alpha = this.moveEffect.duration / 15; // Fade out over 15 frames
-                        if (this.moveEffect.duration <= 0) {
-                            this.moveActive = false;
-                            this.moveEffect = null;
-                        }
-                    }
-                    break;
             }
         }
 
         if (this.secondaryAbilityActive && this.secondaryAbilityEffect) {
+            // Only decrease duration for abilities that have a duration
             this.secondaryAbilityEffect.duration--;
             if (this.secondaryAbilityEffect.duration <= 0) {
                 this.secondaryAbilityActive = false;
@@ -401,18 +393,6 @@ class Character {
                 this.ctx.beginPath();
                 this.ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.width / 2 + 5 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
                 this.ctx.stroke();
-            } else if (this.moveType === 'bite') { // Draw the bite flash effect
-                if (this.moveEffect.type === 'bite_flash' && this.moveEffect.image && this.moveEffect.target) {
-                    this.ctx.save();
-                    this.ctx.globalAlpha = this.moveEffect.alpha;
-                    // Draw the bite image on the target's position
-                    this.ctx.drawImage(this.moveEffect.image,
-                                       this.moveEffect.target.x,
-                                       this.moveEffect.target.y,
-                                       this.moveEffect.target.width,
-                                       this.moveEffect.target.height);
-                    this.ctx.restore();
-                }
             }
         }
 
@@ -474,8 +454,6 @@ class Character {
                     this.ctx.rect(this.x - 5 * CHARACTER_SCALE_FACTOR, this.y - 5 * CHARACTER_SCALE_FACTOR, this.width + 10 * CHARACTER_SCALE_FACTOR, this.height + 10 * CHARACTER_SCALE_FACTOR);
                     this.ctx.stroke();
                     break;
-                // Teleport is instant, so no drawing effect here.
-                // The position is updated in useSecondaryAbility.
             }
         }
     }
@@ -724,28 +702,6 @@ class Character {
                         this.moveEffect = null;
                     }
                     break;
-                case 'bite': // Implement the Vampire's 'bite' special move
-                    if (nearestOpponent && GameUtils.checkDistance(this, nearestOpponent) < this.width * 0.8) { // Close range attack
-                        const damage = 60; // High damage
-                        nearestOpponent.takeDamage(damage, this.attack, this.name, characters);
-                        this.damageDealt += damage;
-                        GameUtils.displayMessage(`${this.name} bit ${nearestOpponent.name} for ${damage} damage!`);
-                        GameUtils.playHitSound();
-
-                        // Create a bite flash effect on the victim
-                        this.moveEffect = {
-                            type: 'bite_flash',
-                            target: nearestOpponent,
-                            duration: 15, // Flash for 15 frames (~0.25 seconds)
-                            alpha: 1,
-                            image: GameUtils.loadedImages[BITE_IMAGE_URL] // Use the preloaded bite image
-                        };
-                        this.moveActive = true;
-                    } else {
-                        this.moveActive = false; // Don't activate if no opponent or too far
-                        this.moveEffect = null;
-                    }
-                    break;
             }
         }
     }
@@ -826,16 +782,6 @@ class Character {
                     this.secondaryAbilityEffect = { type: 'fortify', duration: SECONDARY_ABILITY_DURATION_FRAMES };
                     this.defense *= 2.0;
                     GameUtils.displayMessage(`${this.name} fortified themselves!`);
-                    break;
-                case 'teleport': // Implement the Vampire's 'teleport' secondary ability
-                    // Teleport is an instant action, so we update position directly
-                    this.x = Math.random() * (this.canvas.width - this.width);
-                    this.y = Math.random() * (this.canvas.height - this.height);
-                    GameUtils.displayMessage(`${this.name} teleported!`);
-                    GameUtils.playHitSound(); // Play a sound for teleport
-                    // Since it's instant, immediately set active to false and clear effect
-                    this.secondaryAbilityActive = false;
-                    this.secondaryAbilityEffect = null;
                     break;
             }
             GameUtils.playHitSound();

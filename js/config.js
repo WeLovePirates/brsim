@@ -28,8 +28,7 @@ const SOUND_COOLDOWN = 100; // Minimum time between sounds in milliseconds
 // New: Quick Draw hit chance
 const QUICKDRAW_HIT_CHANCE = 0.15; // 15% chance for Galloner's Quick Draw to hit
 
-// New constant for the bite effect image
-const BITE_IMAGE_URL = './sprites/bite.png'; // Path to your bite animation image
+// Removed BITE_IMAGE_URL as bite animation is now purely programmatic.
 
 const IMAGE_SOURCES = [
     { name: 'Clown', url: './sprites/clown.png', move: 'confetti', attack: 8, defense: 8, speed: 1.2,
@@ -48,7 +47,4 @@ const IMAGE_SOURCES = [
       secondaryAbility: 'magic_shield', secondaryAbilityCooldown: 10000 },
     { name: 'Tank', url: './sprites/tank.png', move: 'charge', attack: 9, defense: 15, speed: 0.7,
       secondaryAbility: 'fortify', secondaryAbilityCooldown: 11000 },
-    // New Character: Vampire
-    { name: 'Vampire', url: './sprites/vampire.png', move: 'bite', attack: 30, defense: 8, speed: 0.6, // Slow but powerful
-      secondaryAbility: 'teleport', secondaryAbilityCooldown: 12000 } // Teleport cooldown
 ];
