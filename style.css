@@ -10,6 +10,7 @@ body {
     align-items: center; /* Center horizontally */
     justify-content: flex-start; /* Align to top initially, adjust based on content */
     min-height: 100vh; /* Ensure body takes full viewport height */
+    position: relative; /* Needed for absolute positioning of winProbabilityMenu */
 }
 .container {
     text-align: center;
@@ -151,18 +152,28 @@ h1 {
 }
 
 #winProbabilityMenu {
-    position: absolute;
-    top: 1rem;
-    right: 1rem;
-    background-color: #000000; /* Menu background is black */
-    padding: 1rem;
+    position: absolute; /* Keeps it absolutely positioned relative to body */
+    top: 50%; /* Centers vertically */
+    transform: translateY(-50%); /* Adjusts for half its own height to truly center */
+    left: auto; /* CHANGED: Positioned to the left edge */
+    right: 1rem; /* Ensure it doesn't try to position from both left and right */
+    background-color: #000000;
+    padding: 1.5rem; /* Increased padding */
     border-radius: 0.5rem;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    font-size: 0.875rem;
+    font-size: 1.1rem; /* Increased font size */
     font-weight: 600;
     z-index: 10;
-    min-width: 9.375rem;
+    min-width: 200px; /* Increased minimum width */
+    max-width: 250px; /* Added max-width to control size */
 }
+
+/* Override Tailwind text color classes for winProbabilityMenu children */
+#winProbabilityMenu,
+#winProbabilityMenu * {
+    color: #FFFFFF !important; /* Force white color */
+}
+
 #winProbabilityMenu p {
     margin: 0.25rem 0;
     display: flex;
@@ -171,11 +182,9 @@ h1 {
 }
 #winProbabilityMenu p span:first-child {
     font-weight: 600;
-    color: #FFFFFF; /* Changed to white for visibility on black background */
 }
 #winProbabilityMenu p span:last-child {
     font-weight: 400;
-    color: #E5E7EB; /* Light gray for probability values */
 }
 
 /* Responsive adjustments */
@@ -191,7 +200,8 @@ h1 {
         top: auto;
         bottom: 1rem;
         left: 1rem;
-        right: 1rem;
+        right: rem;
         max-width: unset;
+        transform: none; /* Remove transform for mobile, let bottom/left/right position it */
     }
 }
