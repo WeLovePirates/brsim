@@ -16,6 +16,8 @@ let gameStartTime;
 let gameEndTime;
 let lastProbUpdateTime = 0;
 
+let mapImage;
+
 // This function calculates probabilities and is now globally accessible
 function calculateWinProbabilities(chars) {
     const aliveCharacters = chars.filter(char => char.isAlive);
@@ -41,98 +43,115 @@ function calculateWinProbabilities(chars) {
 
 
 async function initGame() {
-    GameUtils.initAudio(); // Initialize Tone.js audio context
+    GameUtils.initAudio();
 
-    GameUI.updateCanvasSize(canvas); // Set initial canvas size
-
-    // Pass the calculateWinProbabilities function to ui.js via its global setter
     GameUI.setCalculateWinProbabilitiesFunction(calculateWinProbabilities);
+    GameUI.initUIMechanics(canvas, startGame, resetGame);
 
-    GameUI.initUIMechanics(canvas, startGame, resetGame); // Set up UI event listeners
+    GameUtils.displayMessage("Loading characters and map...");
 
-    GameUtils.displayMessage("Loading characters..."); //
-    const loadedImages = await Promise.all(IMAGE_SOURCES.map(src => { //
+    mapImage = new Image();
+    mapImage.src = MAP_IMAGE_SOURCE;
+    await new Promise((resolve, reject) => {
+        mapImage.onload = resolve;
+        mapImage.onerror = () => {
+            console.error(`Failed to load map image: ${MAP_IMAGE_SOURCE}`);
+            mapImage.src = `https://placehold.co/${canvas.width}x${canvas.height}/000000/FFFFFF?text=MAP+LOAD+ERROR`;
+            mapImage.onload = resolve;
+            mapImage.onerror = reject;
+        };
+    });
+
+    const loadedImages = await Promise.all(IMAGE_SOURCES.map(src => {
         return new Promise((resolve, reject) => {
             const img = new Image();
-            img.src = src.url; //
+            img.src = src.url;
             img.onload = () => resolve({
-                name: src.name, //
+                name: src.name,
                 image: img,
-                move: src.move, //
-                attack: src.attack, //
-                defense: src.defense, //
-                speed: src.speed, //
-                health: src.health, //
-                secondaryAbility: src.secondaryAbility, //
-                secondaryAbilityCooldown: src.secondaryAbilityCooldown, //
-                isDummy: src.isDummy || false // Pass the isDummy flag
+                move: src.move,
+                attack: src.attack,
+                defense: src.defense,
+                speed: src.speed,
+                health: src.health,
+                secondaryAbility: src.secondaryAbility,
+                secondaryAbilityCooldown: src.secondaryAbilityCooldown,
+                isDummy: src.isDummy || false
             });
             img.onerror = () => {
-                console.error(`Failed to load image: ${src.url}`); //
-                img.src = `https://placehold.co/80x80/ff0000/FFFFFF?text=LOAD+ERROR`; // Fallback placeholder
-                img.onload = () => resolve({ // Resolve even if fallback is used
-                    name: src.name, //
+                console.error(`Failed to load image: ${src.url}`);
+                img.src = `https://placehold.co/80x80/ff0000/FFFFFF?text=LOAD+ERROR`;
+                img.onload = () => resolve({
+                    name: src.name,
                     image: img,
-                    move: src.move, //
-                    attack: src.attack, //
-                    defense: src.defense, //
-                    speed: src.speed, //
-                    health: src.health, //
-                    secondaryAbility: src.secondaryAbility, //
-                    secondaryAbilityCooldown: src.secondaryAbilityCooldown, //
-                    isDummy: src.isDummy || false // Pass the isDummy flag
+                    move: src.move,
+                    attack: src.attack,
+                    defense: src.defense,
+                    speed: src.speed,
+                    health: src.health,
+                    secondaryAbility: src.secondaryAbility,
+                    secondaryAbilityCooldown: src.secondaryAbilityCooldown,
+                    isDummy: src.isDummy || false
                 });
-                img.onerror = () => reject(new Error(`Critical: Fallback image failed for ${src.name}`)); //
+                img.onerror = () => reject(new Error(`Critical: Fallback image failed for ${src.name}`));
             };
         });
     }));
 
-    characters = loadedImages.map(data => new Character( // Access global Character class
+    characters = loadedImages.map(data => new Character(
         data.name,
         data.image,
         data.move,
         data.attack,
         data.defense,
         data.speed,
-        GameUI.CHARACTER_SCALE_FACTOR, // Access via GameUI
+        GameUI.CHARACTER_SCALE_FACTOR,
         data.health,
         data.secondaryAbility,
         data.secondaryAbilityCooldown,
         canvas,
-        data.isDummy // Pass the isDummy flag to the Character constructor
+        data.isDummy
     ));
-    resetGame(); //
-    GameUtils.displayMessage("Characters loaded! Click 'Start Game' to begin."); //
-    GameUI.updateWinProbabilityMenu(characters); //
+    resetGame();
+    GameUtils.displayMessage("Characters and map loaded! Click 'Start Game' to begin.");
+    GameUI.updateWinProbabilityMenu(characters);
 }
 
 function gameLoop() {
-    if (!gameRunning) { //
+    if (!gameRunning) {
         return;
     }
 
     const currentTime = Date.now();
 
-    if (currentTime - lastProbUpdateTime > PROB_UPDATE_INTERVAL) { //
-        GameUI.updateWinProbabilityMenu(characters); //
-        lastProbUpdateTime = currentTime; //
+    if (currentTime - lastProbUpdateTime > PROB_UPDATE_INTERVAL) {
+        GameUI.updateWinProbabilityMenu(characters);
+        lastProbUpdateTime = currentTime;
     }
 
-    characters.forEach(char => char.update(characters, GameUI.CHARACTER_SCALE_FACTOR)); //
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (mapImage.complete && mapImage.naturalWidth > 0) {
+        ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
+    } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+
+    characters.forEach(char => char.update(characters, GameUI.CHARACTER_SCALE_FACTOR));
 
     characters.forEach(char => {
-        if (char.isAlive && char.secondaryAbilityActive && char.secondaryAbilityEffect && char.secondaryAbilityEffect.type === 'static_field') { //
+        if (char.isAlive && char.secondaryAbilityActive && char.secondaryAbilityEffect && char.secondaryAbilityEffect.type === 'static_field') {
             characters.forEach(target => {
-                // Static field does not affect dummy characters
-                if (target !== char && target.isAlive && !target.isDummy && GameUtils.checkDistance(char, target) < char.secondaryAbilityEffect.radius) { //
-                    target.health -= char.secondaryAbilityEffect.tickDamage; //
-                    char.damageDealt += char.secondaryAbilityEffect.tickDamage; //
-                    if (target.health <= 0) { //
-                        target.health = 0; //
-                        target.isAlive = false; //
-                        target.deathTime = performance.now(); //
-                        GameUtils.displayMessage(`${target.name} was defeated by ${char.name}'s Static Field!`); //
-                        char.kills++; //
+                if (target !== char && target.isAlive && !target.isDummy && GameUtils.checkDistance(char, target) < char.secondaryAbilityEffect.radius) {
+                    target.health -= char.secondaryAbilityEffect.tickDamage;
+                    char.damageDealt += char.secondaryAbilityEffect.tickDamage;
+                    if (target.health <= 0) {
+                        target.health = 0;
+                        target.isAlive = false;
+                        target.deathTime = performance.now();
+                        GameUtils.displayMessage(`${target.name} was defeated by ${char.name}'s Static Field!`);
+                        char.kills++;
                     }
                 }
             });
@@ -140,201 +159,233 @@ function gameLoop() {
     });
 
     characters.forEach(ninja => {
-        if (ninja.isAlive && ninja.moveType === 'shuriken' && ninja.moveActive) { //
-            if (ninja.moveEffect) { //
-                const projectileX = ninja.moveEffect.x; //
-                const projectileY = ninja.moveEffect.y; //
+        if (ninja.isAlive && ninja.moveType === 'shuriken' && ninja.moveActive) {
+            if (ninja.moveEffect) {
+                const projectileX = ninja.moveEffect.x;
+                const projectileY = ninja.moveEffect.y;
 
                 characters.forEach(target => {
-                    // Shuriken does not affect dummy characters
-                    if (target !== ninja && target.isAlive && !target.isBlockingShuriken && !target.isDummy && //
-                        GameUtils.checkDistance({ x: projectileX, y: projectileY, width: 0, height: 0 }, target) < target.width / 2) { //
-                        const damage = 25; //
-                        target.takeDamage(damage, ninja.attack, ninja.name, characters); //
-                        ninja.damageDealt += damage; //
-                        ninja.moveActive = false; //
-                        ninja.moveEffect = null; //
+                    if (target !== ninja && target.isAlive && !target.isBlockingShuriken && !target.isDummy &&
+                        GameUtils.checkDistance({ x: projectileX, y: projectileY, width: 0, height: 0 }, target) < target.width / 2) {
+                        const damage = 25;
+                        target.takeDamage(damage, ninja.attack, ninja.name, characters);
+                        ninja.damageDealt += damage;
+                        ninja.moveActive = false;
+                        ninja.moveEffect = null;
                     }
                 });
             } else {
-                ninja.moveActive = false; //
-                ninja.moveEffect = null; //
+                ninja.moveActive = false;
+                ninja.moveEffect = null;
             }
         }
     });
 
 
-    for (let i = 0; i < characters.length; i++) { //
-        for (let j = i + 1; j < characters.length; j++) { //
-            const char1 = characters[i]; //
-            const char2 = characters[j]; //
+    for (let i = 0; i < characters.length; i++) {
+        for (let j = i + 1; j < characters.length; j++) {
+            const char1 = characters[i];
+            const char2 = characters[j];
 
-            if (char1.isAlive && char2.isAlive && GameUtils.checkCollision(char1, char2)) { //
-                // If either character is phasing or a dummy, they pass through each other without standard collision effects.
-                if (char1.isPhasing || char2.isPhasing || char1.isDummy || char2.isDummy) { //
-                    // No collision damage or push-apart if one is phasing or a dummy.
-                    // Damage immunity for the phasing/dummy character itself is already handled in Character.takeDamage.
-                    // This prevents the non-phasing character from being pushed or taking collision damage from a phasing/dummy character.
+            if (char1.isAlive && char2.isAlive && GameUtils.checkCollision(char1, char2)) {
+                if (char1.isPhasing || char2.isPhasing || char1.isDummy || char2.isDummy) {
                 } else {
-                    // Original collision logic for non-phasing and non-dummy characters
-                    const damage1 = BASE_COLLISION_DAMAGE; // Global constant
-                    const damage2 = BASE_COLLISION_DAMAGE; //
+                    const damage1 = BASE_COLLISION_DAMAGE;
+                    const damage2 = BASE_COLLISION_DAMAGE;
 
-                    char1.takeDamage(damage1, char2.attack, char2.name, characters); //
-                    char2.takeDamage(damage2, char1.attack, char1.name, characters); //
+                    char1.takeDamage(damage1, char2.attack, char2.name, characters);
+                    char2.takeDamage(damage2, char1.attack, char1.name, characters);
 
-                    char2.damageDealt += damage1; //
-                    char1.damageDealt += damage2; //
+                    char2.damageDealt += damage1;
+                    char1.damageDealt += damage2;
 
-                    GameUtils.playHitSound(); //
+                    GameUtils.playHitSound();
 
-                    const overlapX = Math.min(char1.x + char1.width, char2.x + char2.width) - Math.max(char1.x, char2.x); //
-                    const overlapY = Math.min(char1.y + char1.height, char2.y + char2.height) - Math.max(char1.y, char2.y); //
+                    const overlapX = Math.min(char1.x + char1.width, char2.x + char2.width) - Math.max(char1.x, char2.x);
+                    const overlapY = Math.min(char1.y + char1.height, char2.y + char2.height) - Math.max(char1.y, char2.y);
 
-                    if (overlapX < overlapY) { //
-                        if (char1.x < char2.x) { //
-                            char1.x -= overlapX / 2; //
-                            char2.x += overlapX / 2; //
+                    if (overlapX < overlapY) {
+                        if (char1.x < char2.x) {
+                            char1.x -= overlapX / 2;
+                            char2.x += overlapX / 2;
                         } else {
-                            char1.x += overlapX / 2; //
-                            char2.x -= overlapX / 2; //
+                            char1.x += overlapX / 2;
+                            char2.x -= overlapX / 2;
                         }
-                        char1.dx *= -1; //
-                        char2.dx *= -1; //
+                        char1.dx *= -1;
+                        char2.dx *= -1;
                     } else {
-                        if (char1.y < char2.y) { //
-                            char1.y -= overlapY / 2; //
-                            char2.y += overlapY / 2; //
+                        if (char1.y < char2.y) {
+                            char1.y -= overlapY / 2;
+                            char2.y += overlapY / 2;
                         } else {
-                            char1.y += overlapY / 2; //
-                            char2.y -= overlapY / 2; //
+                            char1.y += overlapY / 2;
+                            char2.y -= overlapY / 2;
                         }
-                        char1.dy *= -1; //
-                        char2.dy *= -1; //
+                        char1.dy *= -1;
+                        char2.dy *= -1;
                     }
                 }
             }
         }
     }
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height); //
-    characters.forEach(char => char.draw(GameUI.CHARACTER_SCALE_FACTOR)); //
+    characters.forEach(char => char.draw(GameUI.CHARACTER_SCALE_FACTOR));
 
-    const aliveCharacters = characters.filter(char => char.isAlive); //
-    if (aliveCharacters.length <= 1 && gameRunning) { //
-        gameRunning = false; //
-        cancelAnimationFrame(animationFrameId); //
-        gameEndTime = performance.now(); //
-        if (aliveCharacters.length === 1) { //
-            GameUtils.displayMessage(`${aliveCharacters[0].name} wins the battle!`); //
+    const aliveCharacters = characters.filter(char => char.isAlive);
+    if (aliveCharacters.length <= 1 && gameRunning) {
+        gameRunning = false;
+        cancelAnimationFrame(animationFrameId);
+        gameEndTime = performance.now();
+        if (aliveCharacters.length === 1) {
+            GameUtils.displayMessage(`${aliveCharacters[0].name} wins the battle!`);
         } else {
-            GameUtils.displayMessage("It's a draw! No one survived."); //
+            GameUtils.displayMessage("It's a draw! No one survived.");
         }
-        document.getElementById('startButton').disabled = false; //
-        GameUI.updateWinProbabilityMenu(characters); //
-        GameUI.displayGameSummary(characters, gameStartTime, gameEndTime); //
-    } else if (gameRunning) { //
-        animationFrameId = requestAnimationFrame(gameLoop); //
+        document.getElementById('startButton').disabled = false;
+        GameUI.updateWinProbabilityMenu(characters);
+        GameUI.displayGameSummary(characters, gameStartTime, gameEndTime);
+
+        // REMOVED: document.exitFullscreen() here. It will be triggered by the Play Again button.
+
+    } else if (gameRunning) {
+        animationFrameId = requestAnimationFrame(gameLoop);
     }
 }
 
 
 function startGame() {
-    if (gameRunning) return; //
+    if (gameRunning) return;
 
-    // Resume Tone.js AudioContext on user gesture (Start Button click)
-    if (GameUtils.synth && Tone.context.state !== 'running') { //
-        Tone.context.resume(); //
+    const fullscreenToggle = document.getElementById('fullscreenToggle');
+
+    // Request fullscreen only if the toggle is checked
+    if (fullscreenToggle.checked) {
+        if (document.body.requestFullscreen) {
+            document.body.requestFullscreen();
+        } else if (document.body.mozRequestFullScreen) { /* Firefox */
+            document.body.mozRequestFullScreen();
+        } else if (document.body.webkitRequestFullscreen) { /* Chrome, Safari and Opera */
+            document.body.webkitRequestFullscreen();
+        } else if (document.body.msRequestFullscreen) { /* IE/Edge */
+            document.body.msRequestFullscreen();
+        }
     }
 
-    gameStartTime = performance.now(); //
+    // Update canvas size, passing the state of the fullscreen toggle
+    GameUI.updateCanvasSize(canvas, fullscreenToggle.checked);
+
+    if (GameUtils.synth && Tone.context.state !== 'running') {
+        Tone.context.resume();
+    }
+
+    gameStartTime = performance.now();
     characters.forEach(char => {
-        char.health = char.maxHealth; //
-        char.isAlive = true; //
-        char.lastHitTime = {}; //
-        char.lastMoveTime = 0; //
-        char.lastPatchTime = 0; //
-        char.lastSecondaryAbilityTime = 0; //
-        char.secondaryAbilityActive = false; //
-        char.secondaryAbilityEffect = null; //
-        char.speed = char.originalSpeed; //
-        char.defense = char.originalDefense; //
-        char.isDodging = false; //
-        char.isBlockingShuriken = false; //
-        char.kills = 0; //
-        char.damageDealt = 0; //
-        char.healingDone = 0; //
-        char.spawnTime = gameStartTime; //
-        char.deathTime = 0; //
+        char.health = char.maxHealth;
+        char.isAlive = true;
+        char.lastHitTime = {};
+        char.lastMoveTime = 0;
+        char.lastPatchTime = 0;
+        char.lastSecondaryAbilityTime = 0;
+        char.secondaryAbilityActive = false;
+        char.secondaryAbilityEffect = null;
+        char.speed = char.originalSpeed;
+        char.defense = char.originalDefense;
+        char.isDodging = false;
+        char.isBlockingShuriken = false;
+        char.kills = 0;
+        char.damageDealt = 0;
+        char.healingDone = 0;
+        char.spawnTime = gameStartTime;
+        char.deathTime = 0;
 
-        char.x = Math.random() * (canvas.width - char.width); //
-        char.y = Math.random() * (canvas.height - char.height); //
+        char.x = Math.random() * (canvas.width - char.width);
+        char.y = Math.random() * (canvas.height - char.height);
 
-        // Set movement to 0 for dummy characters
         if (char.isDummy) {
             char.dx = 0;
             char.dy = 0;
         } else {
-            char.dx = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * char.speed * GameUI.CHARACTER_SCALE_FACTOR; //
-            char.dy = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * char.speed * GameUI.CHARACTER_SCALE_FACTOR; //
-            if (Math.abs(char.dx) < 1 * char.speed * GameUI.CHARACTER_SCALE_FACTOR) char.dx = (char.dx > 0 ? 1 : -1) * char.speed * GameUI.CHARACTER_SCALE_FACTOR; //
-            if (Math.abs(char.dy) < 1 * char.speed * GameUI.CHARACTER_SCALE_FACTOR) char.dy = (char.dy > 0 ? 1 : -1) * char.speed * GameUI.CHARACTER_SCALE_FACTOR; //
+            char.dx = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * char.speed * GameUI.CHARACTER_SCALE_FACTOR;
+            char.dy = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * char.speed * GameUI.CHARACTER_SCALE_FACTOR;
+            if (Math.abs(char.dx) < 1 * char.speed * GameUI.CHARACTER_SCALE_FACTOR) char.dx = (char.dx > 0 ? 1 : -1) * char.speed * GameUI.CHARACTER_SCALE_FACTOR;
+            if (Math.abs(char.dy) < 1 * char.speed * GameUI.CHARACTER_SCALE_FACTOR) char.dy = (char.dy > 0 ? 1 : -1) * char.speed * GameUI.CHARACTER_SCALE_FACTOR;
         }
     });
 
-    gameRunning = true; //
-    GameUtils.displayMessage("Battle started with special moves and stats!"); //
-    document.getElementById('startButton').disabled = true; //
-    animationFrameId = requestAnimationFrame(gameLoop); //
+    gameRunning = true;
+    GameUtils.displayMessage("Battle started with special moves and stats!");
+    document.getElementById('startButton').disabled = true;
+    animationFrameId = requestAnimationFrame(gameLoop);
 
-    lastProbUpdateTime = Date.now(); //
-    GameUI.updateWinProbabilityMenu(characters); //
+    lastProbUpdateTime = Date.now();
+    GameUI.updateWinProbabilityMenu(characters);
 }
 
 function resetGame() {
-    cancelAnimationFrame(animationFrameId); //
-    gameRunning = false; //
-    document.getElementById('startButton').disabled = false; //
-    ctx.clearRect(0, 0, canvas.width, canvas.height); //
+    cancelAnimationFrame(animationFrameId);
+    gameRunning = false;
+    document.getElementById('startButton').disabled = false;
+
+    const fullscreenToggle = document.getElementById('fullscreenToggle');
+
+    // Exit fullscreen if active (will be triggered by Play Again or manual exit)
+    if (document.fullscreenElement) {
+        document.exitFullscreen();
+    }
+    // Update canvas size to non-fullscreen dimensions, passing the state of the toggle
+    // This call is now primarily for re-sizing, UI visibility is handled separately.
+    GameUI.updateCanvasSize(canvas, false); // Always pass false to revert to normal sizing on reset
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (mapImage.complete && mapImage.naturalWidth > 0) {
+        ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
+    } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
     characters.forEach(char => {
-        char.health = char.maxHealth; //
-        char.isAlive = true; //
-        char.lastHitTime = {}; //
-        char.lastMoveTime = 0; //
-        char.lastPatchTime = 0; //
-        char.lastSecondaryAbilityTime = 0; //
-        char.secondaryAbilityActive = false; //
-        char.secondaryAbilityEffect = null; //
-        char.speed = char.originalSpeed; //
-        char.defense = char.originalDefense; //
-        char.isDodging = false; //
-        char.isBlockingShuriken = false; //
-        char.kills = 0; //
-        char.damageDealt = 0; //
-        char.healingDone = 0; //
-        char.spawnTime = 0; //
-        char.deathTime = 0; //
+        char.health = char.maxHealth;
+        char.isAlive = true;
+        char.lastHitTime = {};
+        char.lastMoveTime = 0;
+        char.lastPatchTime = 0;
+        char.lastSecondaryAbilityTime = 0;
+        char.secondaryAbilityActive = false;
+        char.secondaryAbilityEffect = null;
+        char.speed = char.originalSpeed;
+        char.defense = char.originalDefense;
+        char.isDodging = false;
+        char.isBlockingShuriken = false;
+        char.kills = 0;
+        char.damageDealt = 0;
+        char.healingDone = 0;
+        char.spawnTime = 0;
+        char.deathTime = 0;
 
-        char.x = Math.random() * (canvas.width - char.width); //
-        char.y = Math.random() * (canvas.height - char.height); //
+        char.x = Math.random() * (canvas.width - char.width);
+        char.y = Math.random() * (canvas.height - char.height);
 
-        // Set movement to 0 for dummy characters
         if (char.isDummy) {
             char.dx = 0;
             char.dy = 0;
         } else {
-            char.dx = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * char.speed * GameUI.CHARACTER_SCALE_FACTOR; //
-            char.dy = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * char.speed * GameUI.CHARACTER_SCALE_FACTOR; //
-            if (Math.abs(char.dx) < 1 * char.speed * GameUI.CHARACTER_SCALE_FACTOR) char.dx = (char.dx > 0 ? 1 : -1) * char.speed * GameUI.CHARACTER_SCALE_FACTOR; //
-            if (Math.abs(char.dy) < 1 * char.speed * GameUI.CHARACTER_SCALE_FACTOR) char.dy = (char.dy > 0 ? 1 : -1) * char.speed * GameUI.CHARACTER_SCALE_FACTOR; //
+            char.dx = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * char.speed * GameUI.CHARACTER_SCALE_FACTOR;
+            char.dy = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * char.speed * GameUI.CHARACTER_SCALE_FACTOR;
+            if (Math.abs(char.dx) < 1 * char.speed * GameUI.CHARACTER_SCALE_FACTOR) char.dx = (char.dx > 0 ? 1 : -1) * char.speed * GameUI.CHARACTER_SCALE_FACTOR;
+            if (Math.abs(char.dy) < 1 * char.speed * GameUI.CHARACTER_SCALE_FACTOR) char.dy = (char.dy > 0 ? 1 : -1) * char.speed * GameUI.CHARACTER_SCALE_FACTOR;
         }
-        char.draw(GameUI.CHARACTER_SCALE_FACTOR); //
+        char.draw(GameUI.CHARACTER_SCALE_FACTOR);
     });
-    GameUtils.displayMessage("Game reset. Click 'Start Game' to play again!"); //
-    GameUI.updateWinProbabilityMenu(characters); //
+    GameUtils.displayMessage("Game reset. Click 'Start Game' to play again!");
+    GameUI.updateWinProbabilityMenu(characters);
 
-    if (GameUI.gameSummaryOverlay) { //
-        GameUI.gameSummaryOverlay.style.display = 'none'; //
+    // Hide summary overlay if it's visible on reset
+    if (GameUI.gameSummaryOverlay) {
+        GameUI.gameSummaryOverlay.style.opacity = '0';
+        GameUI.gameSummaryOverlay.style.pointerEvents = 'none';
+        GameUI.gameSummaryOverlay.querySelector('#summaryPanel').classList.remove('active');
     }
 }
 

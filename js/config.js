@@ -32,6 +32,8 @@ const INVISIBILITY_DAMAGE_REDUCTION = 0.5; // Buffed: Character takes 50% of nor
 const INVISIBILITY_DODGE_BOOST = 0.3;    // Buffed: 30% additive boost to dodge chance
 const GHOST_BOO_DAMAGE = 25; // New constant for Ghost's Boo move damage
 
+const MAP_IMAGE_SOURCE = './sprites/map.png'; // New: Path to your map image
+
 const IMAGE_SOURCES = [
     { name: 'Clown', url: './sprites/clown.png', move: 'confetti', attack: 8, defense: 8, speed: 1.2,
       secondaryAbility: 'slippery_floor', secondaryAbilityCooldown: 7000 },

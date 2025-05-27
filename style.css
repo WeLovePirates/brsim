@@ -30,7 +30,7 @@ h1 {
 }
 #gameCanvas {
     border: 2px solid #4b5563;
-    background-color: #ffffff;
+    /* background-color: #ffffff; */ /* Removed background-color */
     touch-action: none; /* Disable default touch actions */
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     border-radius: 8px;
@@ -97,23 +97,19 @@ h1 {
 }
 /* Styles for the game summary overlay and win probability menu */
 #gameSummaryOverlay {
-    position: fixed;
-    inset: 0;
+    position: fixed; /* Ensures it stays relative to the viewport */
+    inset: 0; /* Covers the entire viewport */
     background-color: rgba(255, 255, 255, 0.75);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 20;
+    z-index: 20; /* High z-index to appear on top */
     padding: 1rem;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s ease-out, visibility 0s linear 0.3s;
+    opacity: 0; /* Initially transparent */
+    pointer-events: none; /* Initially no pointer events (allows clicks through) */
+    transition: opacity 0.3s ease-out; /* Smooth fade in/out */
 }
-#gameSummaryOverlay.visible {
-    opacity: 1;
-    visibility: visible;
-    transition-delay: 0s;
-}
+/* No .visible class needed for #gameSummaryOverlay itself anymore, JS handles it */
 #summaryPanel {
     background-color: #000000; /* Main panel background is black */
     padding: 2rem;
@@ -155,9 +151,8 @@ h1 {
     position: absolute; /* Keeps it absolutely positioned relative to body */
     top: 50%; /* Centers vertically */
     transform: translateY(-50%); /* Adjusts for half its own height to truly center */
-    left: auto; /* CHANGED: Positioned to the left edge */
+    left: auto; /* Positioned to the left edge */
     right: 1rem; /* Ensure it doesn't try to position from both left and right */
-    background-color: #000000;
     padding: 1.5rem; /* Increased padding */
     border-radius: 0.5rem;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -166,12 +161,15 @@ h1 {
     z-index: 10;
     min-width: 200px; /* Increased minimum width */
     max-width: 250px; /* Added max-width to control size */
+    /* New: Translucency and background */
+    background-color: rgba(0, 0, 0, 0.7); /* Translucent black background */
+    color: #FFFFFF; /* Ensure text is white */
 }
 
 /* Override Tailwind text color classes for winProbabilityMenu children */
 #winProbabilityMenu,
 #winProbabilityMenu * {
-    color: #FFFFFF !important; /* Force white color */
+    color: #FFFFFF !important; /* Force white color for all children */
 }
 
 #winProbabilityMenu p {
@@ -200,7 +198,7 @@ h1 {
         top: auto;
         bottom: 1rem;
         left: 1rem;
-        right: rem;
+        right: 1rem; /* Adjusted for consistency */
         max-width: unset;
         transform: none; /* Remove transform for mobile, let bottom/left/right position it */
     }
