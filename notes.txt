@@ -1,0 +1,65 @@
+# How to Add a New Character Class to Your Game
+
+Adding a new character type to your game with the current modular code structure is straightforward, focusing on specific files for specific types of information. This approach keeps your codebase clean and manageable.
+
+Here's a step-by-step guide:
+
+## 1. Add the Character's Image (New Asset)
+
+Before you touch any code, you'll need the visual asset for your new character.
+
+* **Action:** Place the sprite image file for your new character into the `sprites/` directory within your project.
+* **Example:** If your character is a "Knight," you might save its image as `sprites/knight.png`.
+
+## 2. Define the Character's Properties (`js/config.js`)
+
+This is the primary place where you declare the static attributes and initial configuration for your new character.
+
+* **Action:** Open `js/config.js` and add a new JavaScript object to the `IMAGE_SOURCES` array.
+* **Details to include for each property:**
+    * `name`: The display name of the character (e.g., `'Knight'`).
+    * `url`: The relative path to its sprite image (e.g., `'./sprites/knight.png'`).
+    * `move`: A string identifying the type of special move it uses (e.g., `'slash'`, `'fireball'`). This string will be used in `characterMoves.js` to trigger its specific move logic.
+    * `attack`, `defense`, `speed`: Its base numerical statistics.
+    * `health` (optional): You can specify an initial health value if it differs from the global `INITIAL_HEALTH` defined in `config.js`. If omitted, it defaults to `INITIAL_HEALTH`.
+    * `secondaryAbility`: A string identifying the type of secondary ability (e.g., `'shield_bash'`, `'invisibility'`). This string will be used in `characterAbilities.js` to trigger its specific ability logic.
+    * `secondaryAbilityCooldown`: The cooldown duration (in milliseconds) for its secondary ability.
+
+* **Example of a new entry in `js/config.js`:**
+
+    ```javascript
+    export const IMAGE_SOURCES = [
+        // ... (your existing character entries) ...
+
+        { name: 'Knight', url: './sprites/knight.png', move: 'slash', attack: 15, defense: 10, speed: 1.0,
+          secondaryAbility: 'shield_bash', secondaryAbilityCooldown: 7500 },
+
+        // ... (other character entries) ...
+    ];
+    ```
+
+## 3. Implement Unique Special Moves (`js/character/characterMoves.js`)
+
+If your new character's `move` type (e.g., `'slash'`) performs an action that isn't already defined by another character's move, you'll need to implement its specific logic here.
+
+* **Action:** Open `js/character/characterMoves.js`.
+* **Details:**
+    * Locate the `handleSpecialMove` function. Inside its `switch (character.moveType)` statement, add a new `case` block matching your new character's `move` string. Implement the logic for what happens when this move is activated (e.g., applying damage, creating a projectile, causing a debuff).
+    * Locate the `updateMoveEffect` function. If your new move has ongoing visual effects or duration-based mechanics, add a corresponding `case` block to its `switch (character.moveType)` statement to handle the updates for that effect over time.
+
+## 4. Implement Unique Secondary Abilities (`js/character/characterAbilities.js`)
+
+Similarly, if your new character's `secondaryAbility` type (e.g., `'shield_bash'`) is unique, its behavior needs to be defined here.
+
+* **Action:** Open `js/character/characterAbilities.js`.
+* **Details:**
+    * Locate the `handleSecondaryAbility` function. Inside its `switch (character.secondaryAbilityType)` statement, add a new `case` block matching your new character's `secondaryAbility` string. Implement the logic for what happens when this ability is activated (e.g., a temporary buff, a defensive stance, a crowd control effect).
+    * Locate the `updateAbilityEffect` function. If your new ability has ongoing effects or a specific duration, add a corresponding `case` block to its `switch (abilityType)` statement to manage its state and remove the effect when its duration expires.
+
+## What You **Typically Don't** Need to Change:
+
+* **`js/character/Character.js`**: This file defines the core `Character` class and its fundamental behaviors (movement, health management, basic collision). Because you're extending the existing `move` and `secondaryAbility` mechanisms, you generally *won't need to modify this file*. It's designed to be flexible enough to accommodate new character types through the data in `config.js` and the logic in the separate `characterMoves.js` and `characterAbilities.js` files.
+* **`js/game/gameInit.js`**: This file is responsible for initializing the game and loading characters based on the `IMAGE_SOURCES` array. It's built to dynamically create `Character` instances, so it will automatically pick up your new character without requiring any code changes.
+* **`js/game/gameLoop.js` and `js/game/gameLogic.js`**: These files handle the core game loop, collisions, and overall game mechanics. They operate on the `Character` objects and their properties, so they shouldn't need modification for a new character class unless the new character introduces a completely novel game mechanic that fundamentally changes how the core loop or collision detection works (which is rare for just adding a new character type).
+
+This modular design is precisely why we refactored the code – it allows for easier extension and maintenance. You can add many new characters by primarily modifying just `config.js` and the dedicated `characterMoves.js` and `characterAbilities.js` files for their unique actions.
