@@ -1,40 +1,40 @@
 // js/config.js
 
 // Global constants
-const REFERENCE_GAME_WIDTH = 1200;
-const ORIGINAL_CHARACTER_SIZE = 60;
-const ORIGINAL_SPEED_MAGNITUDE = 1.5;
-const INITIAL_HEALTH = 96;
-const BASE_COLLISION_DAMAGE = 5;
-const HIT_COOLDOWN = 500;
-const MOVE_COOLDOWN = 2000;
-const MEDIC_PATCH_COOLDOWN = 7000;
-const SECONDARY_ABILITY_DURATION_FRAMES = 180;
+export const REFERENCE_GAME_WIDTH = 1200;
+export const ORIGINAL_CHARACTER_SIZE = 60;
+export const ORIGINAL_SPEED_MAGNITUDE = 1.5;
+export const INITIAL_HEALTH = 96;
+export const BASE_COLLISION_DAMAGE = 5;
+export const HIT_COOLDOWN = 500;
+export const MOVE_COOLDOWN = 2000;
+export const MEDIC_PATCH_COOLDOWN = 7000;
+export const SECONDARY_ABILITY_DURATION_FRAMES = 180;
 
 // Low health escape behavior
-const LOW_HEALTH_THRESHOLD = 0.3; // 30% of max health
-const DODGE_CHANCE = 0.7; // 70% chance to dodge when below threshold
-const DODGE_SPEED_MULTIPLIER = 1.5; // Characters move faster when dodging
-const DODGE_DIRECTION_CHANGE_INTERVAL = 2500; // milliseconds - how long a dodge direction lasts
+export const LOW_HEALTH_THRESHOLD = 0.3; // 30% of max health
+export const DODGE_CHANCE = 0.7; // 70% chance to dodge when below threshold
+export const DODGE_SPEED_MULTIPLIER = 1.5; // Characters move faster when dodging
+export const DODGE_DIRECTION_CHANGE_INTERVAL = 2500; // milliseconds - how long a dodge direction lasts
 
 // Low health rush behavior
-const ALL_LOW_HEALTH_RUSH_CHANCE = 0.9; // 90% chance to rush when all are low health
+export const ALL_LOW_HEALTH_RUSH_CHANCE = 0.9; // 90% chance to rush when all are low health
 
 // Probability menu update interval
-const PROB_UPDATE_INTERVAL = 1000; // Update probabilities every 1 second
-const SOUND_COOLDOWN = 100; // Minimum time between sounds in milliseconds
+export const PROB_UPDATE_INTERVAL = 1000; // Update probabilities every 1 second
+export const SOUND_COOLDOWN = 100; // Minimum time between sounds in milliseconds
 
 // New: Quick Draw hit chance
-const QUICKDRAW_HIT_CHANCE = 0.15; // 15% chance for Galloner's Quick Draw to hit
+export const QUICKDRAW_HIT_CHANCE = 0.15; // 15% chance for Galloner's Quick Draw to hit
 
 // Ghost specific buffs
-const INVISIBILITY_DAMAGE_REDUCTION = 0.5; // Buffed: Character takes 50% of normal damage (50% reduction)
-const INVISIBILITY_DODGE_BOOST = 0.3;    // Buffed: 30% additive boost to dodge chance
-const GHOST_BOO_DAMAGE = 25; // New constant for Ghost's Boo move damage
+export const INVISIBILITY_DAMAGE_REDUCTION = 0.5; // Buffed: Character takes 50% of normal damage (50% reduction)
+export const INVISIBILITY_DODGE_BOOST = 0.3;    // Buffed: 30% additive boost to dodge chance
+export const GHOST_BOO_DAMAGE = 25; // New constant for Ghost's Boo move damage
 
-const MAP_IMAGE_SOURCE = './sprites/map.png'; // New: Path to your map image
+export const MAP_IMAGE_SOURCE = './sprites/map.png'; // New: Path to your map image
 
-const IMAGE_SOURCES = [
+export const IMAGE_SOURCES = [
     { name: 'Clown', url: './sprites/clown.png', move: 'confetti', attack: 8, defense: 8, speed: 1.2,
       secondaryAbility: 'slippery_floor', secondaryAbilityCooldown: 7000 },
     { name: 'Frenchie', url: './sprites/frenchie.png', move: 'baguette', attack: 10, defense: 12, speed: 1.0,
@@ -52,5 +52,5 @@ const IMAGE_SOURCES = [
     { name: 'Tank', url: './sprites/tank.png', move: 'charge', attack: 9, defense: 15, speed: 0.7,
       secondaryAbility: 'fortify', secondaryAbilityCooldown: 11000 },
     { name: 'Ghost', url: './sprites/ghost.png', move: 'boo', attack: 15, defense: 3, speed: 1.8,
-      secondaryAbility: 'invisibility', secondaryAbilityCooldown: 10000 }, // Buffed: Cooldown reduced
+      secondaryAbility: 'invisibility', secondaryAbilityCooldown: 10000 },
 ];
