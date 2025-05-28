@@ -63,3 +63,6 @@ Similarly, if your new character's `secondaryAbility` type (e.g., `'shield_bash'
 * **`js/game/gameLoop.js` and `js/game/gameLogic.js`**: These files handle the core game loop, collisions, and overall game mechanics. They operate on the `Character` objects and their properties, so they shouldn't need modification for a new character class unless the new character introduces a completely novel game mechanic that fundamentally changes how the core loop or collision detection works (which is rare for just adding a new character type).
 
 This modular design is precisely why we refactored the code – it allows for easier extension and maintenance. You can add many new characters by primarily modifying just `config.js` and the dedicated `characterMoves.js` and `characterAbilities.js` files for their unique actions.
+
+
+python -m http.server 8000
