@@ -272,7 +272,7 @@ export function drawMessageBox(ctx, canvas, message, scaleFactor) {
  * @param {object} button - Button configuration. Must include x, y, width, height, text.
  * @param {number} scaleFactor - The current character scale factor.
  */
-function drawButton(ctx, button, scaleFactor) {
+export function drawButton(ctx, button, scaleFactor) { // Changed to export
     const scaledWidth = button.width * scaleFactor;
     const scaledHeight = button.height * scaleFactor;
     const scaledX = button.x;

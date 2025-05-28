@@ -9,11 +9,14 @@ import {
     drawMessageBox,
     displayGameSummary,
     addSummaryEventListeners,
-    removeSummaryEventListeners
+    removeSummaryEventListeners,
+    drawButton // Import drawButton
 } from '../ui/uiUpdates.js';
 import { calculateWinProbabilities, handleCollisions, applyStaticFieldDamage, handleShurikenCollisions } from './gameLogic.js';
+import { showMatchCreationMenu, drawMatchCreationMenu, handleMatchCreationClick, matchCreationState } from './matchCreation.js';
+import { getCharacters, setCharacters } from './gameInit.js';
 
-let characters = [];
+let characters = []; // Initialized by setGameLoopDependencies
 let animationFrameId; // Stores the ID returned by requestAnimationFrame
 let gameRunning = false;
 let gameStartTime;
@@ -22,8 +25,8 @@ let lastProbUpdateTime = 0;
 let mapImage;
 let ctx;
 let canvas;
-let currentScreen = 'menu'; // 'menu', 'game', 'summary'
-let cachedProbabilities = []; // NEW: Cache probabilities for rendering
+let currentScreen = 'menu'; // 'menu', 'matchCreation', 'game', 'summary'
+let cachedProbabilities = [];
 
 // --- Fixed Timestep Variables ---
 const MS_PER_UPDATE = 1000 / 60; // Target 60 game logic updates per second (16.67ms per update)
@@ -32,12 +35,12 @@ let deltaTime = 0; // Accumulator for how much time has passed since the last ga
 
 // Variables for in-canvas buttons
 const menuButtons = {
-    start: { text: 'Start Game', x: 0, y: 0, width: 300, height: 60, align: 'center', originalY: null, action: 'startGame' },
-    fullscreenToggle: { text: 'Toggle Fullscreen (F)', x: 0, y: 0, width: 300, height: 60, align: 'center', originalY: null, action: 'toggleFullscreen' }
+    start: { text: 'Start Game', x: 0, y: 0, width: 300, height: 60, action: 'showMatchCreation' },
+    fullscreenToggle: { text: 'Toggle Fullscreen (F)', x: 0, y: 0, width: 300, height: 60, action: 'toggleFullscreen' }
 };
 
 // Define the "Play Again" button for the summary screen here
-export const playAgainButton = { // Exported for uiUpdates.js to update its position
+export const playAgainButton = {
     text: 'Play Again',
     width: 250,
     height: 50,
@@ -59,15 +62,12 @@ export function setGameLoopDependencies(gameCanvas, context, initialCharacters, 
     characters = initialCharacters;
     mapImage = initialMapImage;
 
-    // Add click listener to the canvas for in-canvas buttons
     canvas.addEventListener('click', handleCanvasClick);
 
-    // Listen for fullscreen change to update canvas size and redraw
     document.addEventListener('fullscreenchange', () => {
         updateCanvasSize(canvas, document.fullscreenElement);
-        // If exiting fullscreen, reset to menu to ensure proper redraw
         if (!document.fullscreenElement) {
-            resetGame(); // This will properly transition to menu and handle redraw
+            resetGame();
         }
     });
     document.addEventListener('webkitfullscreenchange', () => {
@@ -89,14 +89,12 @@ export function setGameLoopDependencies(gameCanvas, context, initialCharacters, 
         }
     });
 
-    // Listen for 'f' key to toggle fullscreen
     document.addEventListener('keydown', (event) => {
         if (event.key === 'f' || event.key === 'F') {
             toggleFullscreen();
         }
     });
 
-    // Listen for 'p' key to toggle probability menu visibility
     document.addEventListener('keydown', (event) => {
         if (event.key === 'p' || event.key === 'P') {
             if (currentScreen === 'game') {
@@ -108,10 +106,6 @@ export function setGameLoopDependencies(gameCanvas, context, initialCharacters, 
             }
         }
     });
-
-    // Start the game loop (which will then call requestAnimationFrame continuously)
-    // Removed from here, moved into the gameLoop function itself for recursive calls.
-    // The initial call will be handled by window.onload in main.js
 }
 
 /**
@@ -126,22 +120,33 @@ function handleCanvasClick(event) {
     if (currentScreen === 'menu') {
         for (const key in menuButtons) {
             const button = menuButtons[key];
+            // Use currentX/Y/Width/Height which are set by drawButton
             if (clickX >= button.currentX && clickX <= button.currentX + button.currentWidth &&
                 clickY >= button.currentY && clickY <= button.currentY + button.currentHeight) {
-                if (button.action === 'startGame') {
-                    startGame(true); // Always start with requestFullscreenOnStart true
+                if (button.action === 'showMatchCreation') {
+                    showMatchCreationMenu();
+                    currentScreen = 'matchCreation';
                 } else if (button.action === 'toggleFullscreen') {
                     toggleFullscreen();
                 }
                 return;
             }
         }
+    } else if (currentScreen === 'matchCreation') {
+        // handleMatchCreationClick is now an async function, so await its result
+        handleMatchCreationClick(clickX, clickY, canvas, CHARACTER_SCALE_FACTOR).then(result => {
+            if (result === 'startGame') {
+                startGame(true);
+            } else if (result === 'backToMenu') {
+                showMainMenu();
+            }
+        });
+        return;
     } else if (currentScreen === 'summary') {
-        // Handle "Play Again" button click
         if (clickX >= playAgainButton.currentX && clickX <= playAgainButton.currentX + playAgainButton.currentWidth &&
             clickY >= playAgainButton.currentY && clickY <= playAgainButton.currentY + playAgainButton.currentHeight) {
-            resetGame(); // This will transition back to the menu
-            return; // Prevent further click processing
+            resetGame();
+            return;
         }
     }
 }
@@ -159,73 +164,33 @@ export function toggleFullscreen() {
     }
 }
 
-
-/**
- * Draws a button on the canvas.
- * @param {object} button - Button configuration.
- * @param {number} scaleFactor - The current character scale factor.
- */
-function drawButton(button, scaleFactor) {
-    const scaledWidth = button.width * scaleFactor;
-    const scaledHeight = button.height * scaleFactor;
-    let scaledX, scaledY;
-
-    // Buttons within the menuButtons are centered horizontally
-    if (button.align === 'center') {
-        scaledX = canvas.width / 2 - scaledWidth / 2;
-        scaledY = button.y; // Y is already scaled if `button.y` is derived from `canvas.height`
-    } else { // Assume top-left aligned if not specified (e.g., playAgainButton)
-        scaledX = button.x; // These will be pre-calculated by displayGameSummary
-        scaledY = button.y;
-    }
-
-    ctx.fillStyle = '#1a202c'; // Dark background
-    ctx.fillRect(scaledX, scaledY, scaledWidth, scaledHeight);
-
-    ctx.strokeStyle = '#4a5568'; // Border color
-    ctx.lineWidth = 2 * scaleFactor;
-    ctx.strokeRect(scaledX, scaledY, scaledWidth, scaledHeight);
-
-    ctx.fillStyle = '#e2e8f0'; // Text color
-    ctx.font = `${20 * scaleFactor}px 'Inter', sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(button.text, scaledX + scaledWidth / 2, scaledY + scaledHeight / 2);
-
-    // Store actual position for click detection
-    button.currentX = scaledX;
-    button.currentY = scaledY;
-    button.currentWidth = scaledWidth;
-    button.currentHeight = scaledHeight;
-}
-
-
 /**
  * Draws the main menu on the canvas.
  */
 function drawMainMenu() {
-    // Background is drawn in gameLoop, no need to clear/redraw map here.
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // Dark overlay for menu
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.font = `${48 * CHARACTER_SCALE_FACTOR}px 'Press Start 2P'`; // Retro font for title
-    ctx.fillStyle = '#FFD700'; // Gold color
+    ctx.font = `${48 * CHARACTER_SCALE_FACTOR}px 'Press Start 2P'`;
+    ctx.fillStyle = '#FFD700';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('BRSim', canvas.width / 2, canvas.height / 2 - 100 * CHARACTER_SCALE_FACTOR);
 
-    // Update button positions relative to canvas size for the menu
+    // Calculate button positions for centering
+    const buttonWidth = menuButtons.start.width * CHARACTER_SCALE_FACTOR;
+    const buttonHeight = menuButtons.start.height * CHARACTER_SCALE_FACTOR;
+    const buttonSpacing = 20 * CHARACTER_SCALE_FACTOR; // Space between buttons
+
+    menuButtons.start.x = (canvas.width / 2) - (buttonWidth / 2);
     menuButtons.start.y = canvas.height / 2 + 0;
-    menuButtons.start.originalY = menuButtons.start.y / CHARACTER_SCALE_FACTOR; // Store unscaled Y
 
-    menuButtons.fullscreenToggle.y = canvas.height / 2 + 80 * CHARACTER_SCALE_FACTOR;
-    menuButtons.fullscreenToggle.originalY = menuButtons.fullscreenToggle.y / CHARACTER_SCALE_FACTOR; // Store unscaled Y
+    menuButtons.fullscreenToggle.x = (canvas.width / 2) - (buttonWidth / 2);
+    menuButtons.fullscreenToggle.y = menuButtons.start.y + buttonHeight + buttonSpacing;
 
-    drawButton(menuButtons.start, CHARACTER_SCALE_FACTOR);
-    drawButton(menuButtons.fullscreenToggle, CHARACTER_SCALE_FACTOR);
+    drawButton(ctx, menuButtons.start, CHARACTER_SCALE_FACTOR);
+    drawButton(ctx, menuButtons.fullscreenToggle, CHARACTER_SCALE_FACTOR);
 
-    // Draw message box (e.g., "Game assets loaded. Click 'Start Game' to begin!")
     drawMessageBox(ctx, canvas, displayMessage.currentMessage, CHARACTER_SCALE_FACTOR);
 }
 
@@ -236,33 +201,26 @@ function drawMainMenu() {
 function updateGameLogic() {
     const currentTime = Date.now();
 
-    // Update win probabilities periodically and cache them for rendering
     if (currentTime - lastProbUpdateTime > PROB_UPDATE_INTERVAL) {
-        cachedProbabilities = calculateWinProbabilities(characters); // Store in cache
+        cachedProbabilities = calculateWinProbabilities(characters);
         lastProbUpdateTime = currentTime;
     }
 
-    // Update all characters
     characters.forEach(char => char.update(characters, CHARACTER_SCALE_FACTOR));
 
-    // Apply static field damage
     applyStaticFieldDamage(characters);
 
-    // Handle shuriken collisions
     handleShurikenCollisions(characters);
 
-    // Handle character-to-character collisions
     handleCollisions(characters);
 
-    // Check for game end condition
     const aliveCharacters = characters.filter(char => char.isAlive);
     if (aliveCharacters.length <= 1 && gameRunning) {
         gameRunning = false;
         gameEndTime = performance.now();
-        currentScreen = 'summary'; // Transition to summary screen
+        currentScreen = 'summary';
 
-        // Add summary event listeners when game ends and summary shows
-        addSummaryEventListeners(canvas); // Ensure listeners are active for the summary screen
+        addSummaryEventListeners(canvas);
 
         if (aliveCharacters.length === 1) {
             displayMessage(`${aliveCharacters[0].name} wins the battle!`);
@@ -278,31 +236,25 @@ function updateGameLogic() {
  * @param {DOMHighResTimeStamp} timestamp - The current time provided by requestAnimationFrame.
  */
 export function gameLoop(timestamp) {
-    // THIS LINE IS CRITICAL: It schedules the NEXT frame. It must be at the start!
     animationFrameId = requestAnimationFrame(gameLoop);
 
-    // Calculate time since last frame
-    if (lastFrameTimeMs === 0) lastFrameTimeMs = timestamp; // Initialize for first frame
-    deltaTime += timestamp - lastFrameTimeMs; // Accumulate time
-    lastFrameTimeMs = timestamp; // Update last frame time
+    if (lastFrameTimeMs === 0) lastFrameTimeMs = timestamp;
+    deltaTime += timestamp - lastFrameTimeMs;
+    lastFrameTimeMs = timestamp;
 
-    // Prevent spiral of death by capping deltaTime
-    if (deltaTime > MS_PER_UPDATE * 10) { // If lag spikes, don't run too many updates
+    if (deltaTime > MS_PER_UPDATE * 10) {
         deltaTime = MS_PER_UPDATE * 10;
     }
 
-    // Update game logic in fixed timesteps
     while (deltaTime >= MS_PER_UPDATE) {
-        if (gameRunning) { // Only update game logic when game is active
+        if (gameRunning) {
             updateGameLogic();
         }
         deltaTime -= MS_PER_UPDATE;
     }
 
-    // --- Rendering ---
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw map (as background for all screens)
     if (mapImage.complete && mapImage.naturalWidth > 0) {
         ctx.drawImage(mapImage, 0, 0, canvas.width, canvas.height);
     } else {
@@ -312,16 +264,16 @@ export function gameLoop(timestamp) {
 
     if (currentScreen === 'menu') {
         drawMainMenu();
+    } else if (currentScreen === 'matchCreation') {
+        drawMatchCreationMenu(ctx, canvas, CHARACTER_SCALE_FACTOR);
     } else if (currentScreen === 'game') {
-        // Draw all characters (their state is updated by updateGameLogic)
+        characters = getCharacters();
         characters.forEach(char => char.draw(CHARACTER_SCALE_FACTOR));
 
-        // Draw UI elements *after* game objects to layer them on top
-        drawProbabilityMenu(ctx, canvas, cachedProbabilities, CHARACTER_SCALE_FACTOR); // Use cached probabilities
+        drawProbabilityMenu(ctx, canvas, cachedProbabilities, CHARACTER_SCALE_FACTOR);
         drawMessageBox(ctx, canvas, displayMessage.currentMessage, CHARACTER_SCALE_FACTOR);
 
     } else if (currentScreen === 'summary') {
-        // Continuously draw the summary overlay while on this screen
         displayGameSummary(characters, gameStartTime, gameEndTime, canvas, ctx, playAgainButton);
     }
 }
@@ -332,7 +284,6 @@ export function gameLoop(timestamp) {
 export function showMainMenu() {
     currentScreen = 'menu';
     gameRunning = false;
-    // Remove summary event listeners if we're transitioning from summary to menu
     removeSummaryEventListeners(canvas);
     displayMessage("Game assets loaded. Click 'Start Game' to begin!");
 }
@@ -342,19 +293,38 @@ export function showMainMenu() {
  * Starts the game.
  * @param {boolean} requestFullscreenOnStart - Whether the game should request fullscreen on start.
  */
-export function startGame(requestFullscreenOnStart) {
+export async function startGame(requestFullscreenOnStart) { // MODIFIED: Made async
     if (gameRunning) return;
 
     if (requestFullscreenOnStart && !document.fullscreenElement) {
-        toggleFullscreen(); // Use the existing toggle function
+        toggleFullscreen();
     }
 
-    currentScreen = 'game';
-    gameStartTime = performance.now(); // Store start time for game duration
+    // Dynamic import Character class only once when needed
+    const { Character } = await import('../character/Character.js'); // MODIFIED: Await the import
 
-    // Reset fixed timestep variables
+    const selectedCharactersData = matchCreationState.getSelectedCharactersData();
+
+    const newCharacters = selectedCharactersData.map(data => new Character(
+        data.name,
+        data.image,
+        data.move,
+        data.attack,
+        data.defense,
+        data.speed,
+        CHARACTER_SCALE_FACTOR,
+        data.health,
+        data.secondaryAbility,
+        data.secondaryAbilityCooldown,
+        canvas
+    ));
+    setCharacters(newCharacters);
+
+    currentScreen = 'game';
+    gameStartTime = performance.now();
+
     deltaTime = 0;
-    lastFrameTimeMs = performance.now(); // Reset lastFrameTimeMs here
+    lastFrameTimeMs = performance.now();
 
     characters.forEach(char => {
         char.health = char.maxHealth;
@@ -375,17 +345,15 @@ export function startGame(requestFullscreenOnStart) {
         char.kills = 0;
         char.damageDealt = 0;
         char.healingDone = 0;
-        char.spawnTime = gameStartTime; // Set spawn time for game summary
+        char.spawnTime = gameStartTime;
         char.deathTime = 0;
-        char.isStunned = false; // Ensure stun state is reset
+        char.isStunned = false;
 
         char.x = Math.random() * (canvas.width - char.width);
         char.y = Math.random() * (canvas.height - char.height);
 
-        // Re-initialize dx/dy with original speed and scale factor
         char.dx = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * char.speed * CHARACTER_SCALE_FACTOR;
         char.dy = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * char.speed * CHARACTER_SCALE_FACTOR;
-        // Ensure minimum speed if dx/dy are too small
         if (Math.abs(char.dx) < 1 * char.speed * CHARACTER_SCALE_FACTOR) char.dx = (char.dx > 0 ? 1 : -1) * char.speed * CHARACTER_SCALE_FACTOR;
         if (Math.abs(char.dy) < 1 * char.speed * CHARACTER_SCALE_FACTOR) char.dy = (char.dy > 0 ? 1 : -1) * char.speed * CHARACTER_SCALE_FACTOR;
     });
@@ -394,7 +362,6 @@ export function startGame(requestFullscreenOnStart) {
     displayMessage("Battle started with special moves and stats!");
 
     lastProbUpdateTime = Date.now();
-    // Force an initial probability calculation and cache it immediately
     cachedProbabilities = calculateWinProbabilities(characters);
 }
 
@@ -403,18 +370,16 @@ export function startGame(requestFullscreenOnStart) {
  * This function is now also responsible for returning from the summary screen.
  */
 export function resetGame() {
-    gameRunning = false; // Stop game logic updates
+    gameRunning = false;
 
-    // Exit fullscreen if active (this will trigger the fullscreenchange event, which updates canvas size)
     if (document.fullscreenElement) {
         document.exitFullscreen();
     } else {
-        // If not in fullscreen, ensure canvas size is correct and then show main menu
         updateCanvasSize(canvas, false);
-        showMainMenu(); // Explicitly call showMainMenu after size update
+        showMainMenu();
     }
 
-    // Reset character states for the menu preview
+    characters = getCharacters();
     characters.forEach(char => {
         char.health = char.maxHealth;
         char.isAlive = true;
@@ -436,13 +401,11 @@ export function resetGame() {
         char.healingDone = 0;
         char.spawnTime = 0;
         char.deathTime = 0;
-        char.isStunned = false; // Ensure stun state is reset
+        char.isStunned = false;
 
-        // Reset positions for menu
         char.x = Math.random() * (canvas.width - char.width);
         char.y = Math.random() * (canvas.height - char.height);
 
-        // Re-initialize dx/dy based on current scale factor
         char.dx = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * char.speed * CHARACTER_SCALE_FACTOR;
         char.dy = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * char.speed * CHARACTER_SCALE_FACTOR;
         if (Math.abs(char.dx) < 1 * char.speed * CHARACTER_SCALE_FACTOR) char.dx = (char.dx > 0 ? 1 : -1) * char.speed * CHARACTER_SCALE_FACTOR;
