@@ -9,7 +9,13 @@ import {
     SWARM_BEE_DAMAGE_PER_TICK,
     FEEDING_FRENZY_DURATION_FRAMES, // Import new constant
     FEEDING_FRENZY_ATTACK_SPEED_BOOST, // Import new constant
-    FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE // Import new constant
+    FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE, // Import new constant
+    VOLATILE_CONCOCTION_PROJECTILE_SPEED, // NEW
+    VOLATILE_CONCOCTION_EXPLOSION_RADIUS, // NEW
+    VOLATILE_CONCOCTION_DAMAGE, // NEW
+    VOLATILE_CONCOCTION_HEAL, // NEW
+    VOLATILE_CONCOCTION_STUN_DURATION_FRAMES, // NEW
+    HONEYCOMB_STUN_DURATION_FRAMES // Reused for Alchemist stun
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -35,8 +41,8 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                 minDistance = dist;
                 nearestOpponent = otherChar;
             }
-        }
-    });
+        } // <-- MISSING '}' WAS HERE
+    }); // Corrected: This parenthesis now correctly closes the forEach call.
 
     switch (character.moveType) {
         case 'confetti':
@@ -199,14 +205,9 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
             }
             break;
         case 'charge':
-            if (nearestOpponent) {
-                character.moveEffect = { duration: 90 };
-                character.speed *= 2.5;
-                displayMessage(`${character.name} initiated a Charge!`);
-            } else {
-                character.moveActive = false;
-                character.moveEffect = null;
-            }
+            character.moveEffect = { duration: 90 };
+            character.speed *= 2.5;
+            displayMessage(`${character.name} initiated a Charge!`);
             break;
         case 'boo':
             character.moveEffect = {
@@ -264,6 +265,39 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
             character.dy = Math.sin(currentAngleFrenzy) * newSpeedMagnitudeFrenzy;
 
             displayMessage(`${character.name} entered a Feeding Frenzy!`);
+            break;
+        case 'volatile_concoction': // NEW: Alchemist's Special Move
+            if (nearestOpponent) {
+                const projectileSpeed = VOLATILE_CONCOCTION_PROJECTILE_SPEED * CHARACTER_SCALE_FACTOR;
+                const angleToOpponent = Math.atan2(nearestOpponent.y + nearestOpponent.height / 2 - (character.y + character.height / 2),
+                                                   nearestOpponent.x + nearestOpponent.width / 2 - (character.x + character.width / 2));
+
+                // Randomly choose an effect type: damage, heal, or stun
+                const effectChoices = ['damage', 'heal', 'stun'];
+                const chosenEffect = effectChoices[Math.floor(Math.random() * effectChoices.length)];
+                let projectileColor = 'gray'; // Default
+                if (chosenEffect === 'damage') projectileColor = 'red';
+                else if (chosenEffect === 'heal') projectileColor = 'green';
+                else if (chosenEffect === 'stun') projectileColor = 'purple';
+
+                character.moveEffect = {
+                    type: 'volatile_projectile',
+                    x: character.x + character.width / 2,
+                    y: character.y + character.height / 2,
+                    vx: Math.cos(angleToOpponent) * projectileSpeed,
+                    vy: Math.sin(angleToOpponent) * projectileSpeed,
+                    radius: 15 * CHARACTER_SCALE_FACTOR, // Potion size
+                    life: 120, // Projectile lifespan in frames
+                    effectType: chosenEffect, // Store the chosen effect
+                    color: projectileColor,
+                    hasExploded: false // Flag to ensure explosion only happens once
+                };
+                displayMessage(`${character.name} threw a Volatile Concoction! (${chosenEffect})`);
+            } else {
+                character.moveActive = false;
+                character.moveEffect = null;
+                displayMessage(`${character.name} tried to throw a potion, but had no target!`);
+            }
             break;
     }
 }
@@ -515,7 +549,6 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
             if (character.moveEffect && character.moveEffect.type === 'feeding_frenzy') {
                 character.moveEffect.duration--;
 
-                // --- Removed Visual for Feeding Frenzy from here ---
                 // The visual effect (red pulsing border) is handled in Character.draw() based on `moveEffect.duration`
 
                 if (character.moveEffect.duration <= 0) {
@@ -529,6 +562,104 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                     character.dx = Math.cos(currentAngleReset) * newSpeedMagnitudeReset;
                     character.dy = Math.sin(currentAngleReset) * newSpeedMagnitudeReset;
                     displayMessage(`${character.name}'s Feeding Frenzy ended.`);
+                }
+            }
+            break;
+        case 'volatile_concoction': // NEW: Alchemist's Special Move Update
+            if (character.moveEffect.type === 'volatile_projectile') {
+                character.moveEffect.x += character.moveEffect.vx;
+                character.moveEffect.y += character.moveEffect.vy;
+                character.moveEffect.life--;
+
+                let shouldExplode = false;
+                // Check for collision with any target
+                for (const target of allCharacters) {
+                    // IMPORTANT: Prevent Alchemist from affecting themselves
+                    if (target !== character && target.isAlive && !target.isPhasing) {
+                        const dist = checkDistance(
+                            {x: character.moveEffect.x, y: character.moveEffect.y, width: character.moveEffect.radius * 2, height: character.moveEffect.radius * 2},
+                            target
+                        );
+                        if (dist < target.width / 2 + character.moveEffect.radius) {
+                            shouldExplode = true;
+                            break;
+                        }
+                    }
+                }
+
+                // Check for lifespan expiry or out of bounds
+                if (character.moveEffect.life <= 0 || shouldExplode ||
+                    character.moveEffect.x < -character.moveEffect.radius || character.moveEffect.x > canvas.width + character.moveEffect.radius ||
+                    character.moveEffect.y < -character.moveEffect.radius || character.moveEffect.y > canvas.height + character.moveEffect.radius) {
+                    
+                    // Transform into an explosion effect
+                    character.moveEffect = {
+                        type: 'volatile_explosion',
+                        x: character.moveEffect.x,
+                        y: character.moveEffect.y,
+                        radius: 10 * CHARACTER_SCALE_FACTOR, // Starting small for explosion
+                        maxRadius: VOLATILE_CONCOCTION_EXPLOSION_RADIUS * CHARACTER_SCALE_FACTOR,
+                        duration: 30, // Frames for explosion animation (e.g., 0.5 seconds)
+                        alpha: 1,
+                        effectType: character.moveEffect.effectType, // Carry over effect type
+                        color: character.moveEffect.color,
+                        targetsHit: [] // To prevent hitting the same target multiple times
+                    };
+                }
+            } else if (character.moveEffect.type === 'volatile_explosion') {
+                character.moveEffect.radius += (character.moveEffect.maxRadius - character.moveEffect.radius) * 0.2; // Grow quickly
+                character.moveEffect.alpha -= 1 / character.moveEffect.duration; // Fade out
+
+                // Apply effects to targets in the explosion radius
+                if (character.moveEffect.duration > 0) {
+                    allCharacters.forEach(target => {
+                        // IMPORTANT: Prevent Alchemist from affecting themselves
+                        if (target !== character && target.isAlive && !target.isPhasing && !character.moveEffect.targetsHit.includes(target.name)) {
+                            const dist = checkDistance(
+                                {x: character.moveEffect.x, y: character.moveEffect.y, width: character.moveEffect.radius * 2, height: character.moveEffect.radius * 2},
+                                target
+                            );
+                            if (dist < target.width / 2 + character.moveEffect.radius) {
+                                switch (character.moveEffect.effectType) {
+                                    case 'damage':
+                                        const damageAmount = VOLATILE_CONCOCTION_DAMAGE;
+                                        target.takeDamage(damageAmount, character.attack, character.name, allCharacters);
+                                        character.damageDealt += damageAmount;
+                                        displayMessage(`${target.name} took ${damageAmount} damage from Volatile Concoction!`);
+                                        break;
+                                    case 'heal':
+                                        const healAmount = VOLATILE_CONCOCTION_HEAL;
+                                        target.heal(healAmount);
+                                        displayMessage(`${target.name} healed for ${healAmount} from Volatile Concoction!`);
+                                        break;
+                                    case 'stun':
+                                        if (!target.isStunned) {
+                                            target.isStunned = true;
+                                            target.originalSpeedWhenStunned = target.speed;
+                                            target.speed = 0;
+                                            target.dx = 0;
+                                            target.dy = 0;
+                                            // Apply the 'volatile_concoction_stun' effect for visual differentiation
+                                            target.secondaryAbilityActive = true;
+                                            target.secondaryAbilityEffect = {
+                                                type: 'volatile_concoction_stun', // NEW type for Alchemist stun
+                                                duration: VOLATILE_CONCOCTION_STUN_DURATION_FRAMES // Use Alchemist specific stun duration
+                                            };
+                                            target.lastSecondaryAbilityTime = Date.now(); // Record when they got stuck
+                                            displayMessage(`${target.name} was stunned by Volatile Concoction!`);
+                                        }
+                                        break;
+                                }
+                                character.moveEffect.targetsHit.push(target.name); // Mark as hit by this explosion
+                            }
+                        }
+                    });
+                }
+
+
+                if (character.moveEffect.duration <= 0 || character.moveEffect.alpha <= 0) {
+                    character.moveActive = false;
+                    character.moveEffect = null;
                 }
             }
             break;

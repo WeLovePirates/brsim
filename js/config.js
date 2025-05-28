@@ -38,13 +38,29 @@ export const SWARM_BEE_DAMAGE_PER_TICK = 5; // Damage per tick for each mini bee
 export const HONEYCOMB_STUN_DURATION_FRAMES = 120; // Duration for Honeycomb stun
 export const HONEYCOMB_PROJECTILE_SPEED = 5; // Adjust as needed for projectile speed
 
-// Shark Class 
+// Shark Class
 export const FEEDING_FRENZY_DURATION_FRAMES = 180; // Duration of Feeding Frenzy in frames (e.g., 3 seconds at 60 FPS)
 export const FEEDING_FRENZY_ATTACK_SPEED_BOOST = 1.5; // Multiplier for attack speed (represented by character speed)
 export const FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE = 0.25; // 25% bonus damage to targets below LOW_HEALTH_THRESHOLD
 
 export const FIN_SLICE_BLEED_DURATION_FRAMES = 300; // Duration of bleed effect in frames (e.g., 5 seconds at 60 FPS)
 export const FIN_SLICE_BLEED_DAMAGE_PER_TICK = 3; // Base damage per tick for the bleed effect (applied every 1 second)
+
+// Pyromancer Class (example)
+export const BURN_DAMAGE_PER_TICK = 4; // Damage per tick for burn effect
+export const BURN_DURATION_FRAMES = 180; // Duration of burn effect
+
+// Alchemist Class Constants (NEW)
+export const VOLATILE_CONCOCTION_PROJECTILE_SPEED = 7; // Speed of Alchemist's thrown potion
+export const VOLATILE_CONCOCTION_EXPLOSION_RADIUS = 150; // Radius of potion explosion
+export const VOLATILE_CONCOCTION_DAMAGE = 30; // Direct damage if potion explodes for damage
+export const VOLATILE_CONCOCTION_HEAL = 25; // Healing amount if potion explodes for heal
+export const VOLATILE_CONCOCTION_STUN_DURATION_FRAMES = 90; // Stun duration if potion explodes for stun (1.5 seconds)
+
+export const ELIXIR_DEFENSE_BOOST_PERCENTAGE = 0.4; // 40% defense boost from Elixir
+export const ELIXIR_HEAL_PER_TICK = 2; // Healing amount per tick from Elixir
+export const ELIXIR_HEAL_TICK_INTERVAL_MS = 500; // How often Elixir heals (0.5 seconds)
+
 
 export const MAP_IMAGE_SOURCE = './sprites/map.png'; // New: Path to your map image
 
@@ -69,6 +85,8 @@ export const IMAGE_SOURCES = [
       secondaryAbility: 'invisibility', secondaryAbilityCooldown: 10000 },
     { name: 'Queen Bee', url: './sprites/queen_bee.png', move: 'swarm', attack: 12, defense: 8, speed: 1.3,
       secondaryAbility: 'honeycomb', secondaryAbilityCooldown: 9000 },
-      { name: 'Shark', url: './sprites/shark.png', move: 'feeding_frenzy', attack: 15, defense: 9, speed: 1.1,
+    { name: 'Shark', url: './sprites/shark.png', move: 'feeding_frenzy', attack: 15, defense: 9, speed: 1.1,
       secondaryAbility: 'fin_slice', secondaryAbilityCooldown: 9000 },
+    { name: 'Alchemist', url: './sprites/alchemist.png', move: 'volatile_concoction', attack: 9, defense: 8, speed: 1.0,
+      secondaryAbility: 'elixir_of_fortitude', secondaryAbilityCooldown: 8000 }, // NEW
 ];
