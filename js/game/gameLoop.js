@@ -213,7 +213,7 @@ function drawMainMenu() {
     ctx.fillStyle = '#FFD700'; // Gold color
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('BATTLE ROYALE', canvas.width / 2, canvas.height / 2 - 100 * CHARACTER_SCALE_FACTOR);
+    ctx.fillText('BRSim', canvas.width / 2, canvas.height / 2 - 100 * CHARACTER_SCALE_FACTOR);
 
     // Update button positions relative to canvas size for the menu
     menuButtons.start.y = canvas.height / 2 + 0;
