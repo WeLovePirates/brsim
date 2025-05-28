@@ -3,8 +3,9 @@
 import { IMAGE_SOURCES, MAP_IMAGE_SOURCE, ORIGINAL_SPEED_MAGNITUDE } from '../config.js';
 import { Character } from '../character/Character.js';
 import { displayMessage } from '../utils/displayUtils.js';
-import { setGameLoopDependencies, startGame, resetGame, showMainMenu, toggleFullscreen } from './gameLoop.js'; // Added toggleFullscreen
-import { updateCanvasSize, setCalculateWinProbabilitiesFunction, CHARACTER_SCALE_FACTOR } from '../ui/uiUpdates.js'; // Removed updateWinProbabilityMenu
+import { setGameLoopDependencies, startGame, resetGame, showMainMenu, toggleFullscreen } from './gameLoop.js';
+import { updateCanvasSize, setCalculateWinProbabilitiesFunction, CHARACTER_SCALE_FACTOR } from '../ui/uiUpdates.js';
+import { showMatchCreationMenu, matchCreationState } from './matchCreation.js'; // MODIFIED: Import matchCreationState
 
 let characters = [];
 let mapImage;
@@ -18,19 +19,9 @@ export async function initGame() {
     canvas = document.getElementById('gameCanvas');
     ctx = canvas.getContext('2d');
 
-    // Set initial canvas size and scale factor
-    // We now determine fullscreen status and update size from main.js onload
-    // and gameLoop.js handles fullscreen changes.
     updateCanvasSize(canvas, document.fullscreenElement);
 
-    // Set the function to calculate win probabilities
     setCalculateWinProbabilitiesFunction(calculateWinProbabilities);
-
-    // initUIMechanics now only sets up the canvas size and event listeners for fullscreen.
-    // It no longer creates/manages external buttons.
-    // The canvas click listener is now part of gameLoop.js
-    // We don't need a direct initUIMechanics call for start/reset callbacks here anymore,
-    // as button actions are handled directly in gameLoop.js's canvas click handler.
 
     displayMessage("Loading game assets...");
 
@@ -84,28 +75,22 @@ export async function initGame() {
         });
     }));
 
-    characters = loadedImages.map(data => new Character(
-        data.name,
-        data.image,
-        data.move,
-        data.attack,
-        data.defense,
-        data.speed,
-        CHARACTER_SCALE_FACTOR,
-        data.health,
-        data.secondaryAbility,
-        data.secondaryAbilityCooldown,
-        canvas
-    ));
-
-    // Set dependencies for the game loop
     setGameLoopDependencies(canvas, ctx, characters, mapImage);
+
+    // Initialize match creation with all available characters
+    matchCreationState.setAvailableCharacters(loadedImages); // MODIFIED: Call on matchCreationState
 
     // Show the main menu initially
     showMainMenu();
     displayMessage("Game assets loaded. Click 'Start Game' to begin!");
 }
 
-// Moved from gameInit.js:
-// calculateWinProbabilities must be imported and set for UI functions to work.
 import { calculateWinProbabilities } from './gameLogic.js';
+
+export function getCharacters() {
+    return characters;
+}
+
+export function setCharacters(newCharacters) {
+    characters = newCharacters;
+}

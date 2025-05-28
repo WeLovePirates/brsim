@@ -2,10 +2,10 @@
 
 // Global constants
 export const REFERENCE_GAME_WIDTH = 1200;
-export const ORIGINAL_CHARACTER_SIZE = 60;
+export const ORIGINAL_CHARACTER_SIZE = 40;
 export const ORIGINAL_SPEED_MAGNITUDE = 1.5;
 export const INITIAL_HEALTH = 96;
-export const BASE_COLLISION_DAMAGE = 5;
+export const BASE_COLLISION_DAMAGE = 7;
 export const HIT_COOLDOWN = 500;
 export const MOVE_COOLDOWN = 2000;
 export const MEDIC_PATCH_COOLDOWN = 7000;
@@ -46,10 +46,6 @@ export const FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE = 0.25; // 25% bo
 export const FIN_SLICE_BLEED_DURATION_FRAMES = 300; // Duration of bleed effect in frames (e.g., 5 seconds at 60 FPS)
 export const FIN_SLICE_BLEED_DAMAGE_PER_TICK = 3; // Base damage per tick for the bleed effect (applied every 1 second)
 
-// Pyromancer Class (example)
-export const BURN_DAMAGE_PER_TICK = 4; // Damage per tick for burn effect
-export const BURN_DURATION_FRAMES = 180; // Duration of burn effect
-
 // Alchemist Class Constants (NEW)
 export const VOLATILE_CONCOCTION_PROJECTILE_SPEED = 7; // Speed of Alchemist's thrown potion
 export const VOLATILE_CONCOCTION_EXPLOSION_RADIUS = 150; // Radius of potion explosion
@@ -87,6 +83,6 @@ export const IMAGE_SOURCES = [
       secondaryAbility: 'honeycomb', secondaryAbilityCooldown: 9000 },
     { name: 'Shark', url: './sprites/shark.png', move: 'feeding_frenzy', attack: 15, defense: 9, speed: 1.1,
       secondaryAbility: 'fin_slice', secondaryAbilityCooldown: 9000 },
-    { name: 'Alchemist', url: './sprites/alchemist.png', move: 'volatile_concoction', attack: 9, defense: 8, speed: 1.0,
+    { name: 'Alchemist', url: './sprites/alchemist.png', move: 'volatile_concoction', attack: 9, defense: 1, speed: 1.0,
       secondaryAbility: 'elixir_of_fortitude', secondaryAbilityCooldown: 8000 }, // NEW
 ];
