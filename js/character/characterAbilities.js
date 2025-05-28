@@ -6,7 +6,9 @@ import {
     INVISIBILITY_DAMAGE_REDUCTION,
     INVISIBILITY_DODGE_BOOST,
     HONEYCOMB_STUN_DURATION_FRAMES,
-    HONEYCOMB_PROJECTILE_SPEED
+    HONEYCOMB_PROJECTILE_SPEED,
+    FIN_SLICE_BLEED_DURATION_FRAMES, // Import new constant
+    FIN_SLICE_BLEED_DAMAGE_PER_TICK // Import new constant
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -26,7 +28,7 @@ export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE
     }
 
     // Queen Bee's Honeycomb as a projectile
-    if (character.secondaryAbilityType === 'honeycomb') { // <<< REMOVED Math.random() CONDITION HERE
+    if (character.secondaryAbilityType === 'honeycomb') {
         character.lastSecondaryAbilityTime = Date.now();
         character.secondaryAbilityActive = true;
         character.secondaryAbilityEffect = {
@@ -36,7 +38,7 @@ export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE
             radius: 10 * CHARACTER_SCALE_FACTOR, // Projectile size
             speed: HONEYCOMB_PROJECTILE_SPEED * CHARACTER_SCALE_FACTOR,
             duration: 300, // Projectile lifespan in frames (adjust as needed)
-            dx: 0, // Initial velocity components
+            dx: 0,
             dy: 0,
             angle: 0 // Initial angle, will be set to target if found
         };
@@ -68,11 +70,38 @@ export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE
             character.secondaryAbilityEffect.dy = Math.sin(character.secondaryAbilityEffect.angle) * character.secondaryAbilityEffect.speed;
             displayMessage(`${character.name} launched a Honeycomb! (No target found)`);
         }
+    } else if (character.secondaryAbilityType === 'fin_slice') { // Handle Shark's Fin Slice
+        character.lastSecondaryAbilityTime = Date.now(); // Set cooldown
+        character.secondaryAbilityActive = true; // Activate ability
+
+        let nearestOpponent = null;
+        let minDistance = Infinity;
+        allCharacters.forEach(otherChar => {
+            if (otherChar !== character && otherChar.isAlive && !otherChar.isPhasing) {
+                const dist = checkDistance(character, otherChar);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    nearestOpponent = otherChar;
+                }
+            }
+        });
+
+        // Create the secondaryAbilityEffect for the visual cue and collision detection
+        const angleToOpponent = nearestOpponent ? Math.atan2(nearestOpponent.y - character.y, nearestOpponent.x - character.x) : Math.random() * Math.PI * 2; // Aim at nearest or random
+        character.secondaryAbilityEffect = {
+            type: 'fin_slice',
+            duration: 15, // Short duration for the visual slash (e.g., 0.25 seconds)
+            angle: angleToOpponent, // Angle for drawing the slash
+            targetsHit: [] // New: Keep track of targets already hit by this specific slice
+        };
+
+        displayMessage(`${character.name} used Fin Slice!`);
+
     } else { // Handle other secondary abilities with their original random chance
-        // If it's not honeycomb, or if you want other abilities to still have a random chance:
+        // If it's not honeycomb or fin_slice, or if you want other abilities to still have a random chance:
         if (Math.random() < 0.015) { // Original random chance for other abilities
-            character.lastSecondaryAbilityTime = Date.now(); // This was missing here! IMPORTANT
-            character.secondaryAbilityActive = true; // This was missing here! IMPORTANT
+            character.lastSecondaryAbilityTime = Date.now();
+            character.secondaryAbilityActive = true;
 
             switch (character.secondaryAbilityType) {
                 case 'slippery_floor':
@@ -179,7 +208,47 @@ export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FA
         return; // Projectile update handled separately
     }
 
-    // For all other secondary ability effects (including honeycomb_stick on the target)
+    // Special handling for Fin Slice collision and bleed application
+    if (character.secondaryAbilityEffect.type === 'fin_slice') {
+        // Only apply damage/bleed during the active visual frames
+        if (character.secondaryAbilityEffect.duration > 0) {
+            allCharacters.forEach(target => {
+                // Check if target is valid and hasn't been hit by this slice instance yet
+                if (target !== character && target.isAlive && !target.isPhasing && !character.secondaryAbilityEffect.targetsHit.includes(target.name)) {
+                    // Collision check: if target is within the visual cue's radius
+                    const dist = checkDistance(character, target);
+                    const visualRadius = character.width * 1.1; // Matches the drawing radius
+
+                    if (dist < visualRadius + target.width / 2) { // Add target's half-width for better collision
+                        const damage = 20 + character.attack * 0.8; // Base damage plus attack scaling
+                        target.takeDamage(damage, character.attack, character.name, allCharacters);
+                        character.damageDealt += damage;
+
+                        // Apply bleed effect
+                        target.isBleeding = true;
+                        target.bleedDamagePerTick = FIN_SLICE_BLEED_DAMAGE_PER_TICK + character.attack * 0.1;
+                        target.lastBleedTickTime = Date.now();
+                        target.bleedTarget = character.name;
+                        // Set a timeout to remove bleeding after duration
+                        setTimeout(() => {
+                            if (target.isBleeding && target.bleedTarget === character.name) {
+                                target.isBleeding = false;
+                                target.bleedDamagePerTick = 0;
+                                target.bleedTarget = null;
+                                displayMessage(`${target.name} stopped bleeding.`);
+                            }
+                        }, FIN_SLICE_BLEED_DURATION_FRAMES * (1000/60));
+
+                        displayMessage(`${character.name}'s Fin Slice hit ${target.name}!`);
+                        character.secondaryAbilityEffect.targetsHit.push(target.name); // Mark target as hit
+                    }
+                }
+            });
+        }
+    }
+
+
+    // For all other secondary ability effects (including honeycomb_stick on the target and fin_slice visual)
     character.secondaryAbilityEffect.duration--;
     if (character.secondaryAbilityEffect.duration <= 0) {
         const abilityType = character.secondaryAbilityEffect.type;
@@ -212,6 +281,10 @@ export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FA
                     character.originalSpeedWhenStunned = null; // Clear the stored speed
                 }
                 displayMessage(`${character.name} is no longer stuck!`);
+                break;
+            case 'fin_slice':
+                // No character property changes here, just the visual goes away
+                // The bleed effect is handled by a separate setTimeout when applied.
                 break;
         }
         // Now it's safe to nullify the effect object

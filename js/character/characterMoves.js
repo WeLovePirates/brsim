@@ -6,7 +6,10 @@ import {
     GHOST_BOO_DAMAGE,
     ORIGINAL_SPEED_MAGNITUDE,
     SWARM_DURATION_FRAMES,
-    SWARM_BEE_DAMAGE_PER_TICK
+    SWARM_BEE_DAMAGE_PER_TICK,
+    FEEDING_FRENZY_DURATION_FRAMES, // Import new constant
+    FEEDING_FRENZY_ATTACK_SPEED_BOOST, // Import new constant
+    FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE // Import new constant
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -219,7 +222,7 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                 type: 'swarm',
                 bees: [],
                 duration: SWARM_DURATION_FRAMES,
-                target: nearestOpponent // The swarm will target the nearest opponent
+                target: nearestOpponent
             };
 
             // Create mini bees spawned randomly within Queen Bee's bounds (or slightly outside)
@@ -232,18 +235,35 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                 character.moveEffect.bees.push({
                     x: character.x + character.width / 2 + Math.cos(angleOffset) * distanceOffset,
                     y: character.y + character.height / 2 + Math.sin(angleOffset) * distanceOffset,
-                    vx: 0, // No initial velocity, let flocking decide
+                    vx: 0,
                     vy: 0,
                     size: 15 * CHARACTER_SCALE_FACTOR,
                     image: new Image(),
-                    damageApplied: false, // To ensure damage is applied once per bee per tick
-                    clingingTo: null, // New: Reference to the character it's clinging to
-                    offsetX: 0,       // New: Offset from clinging character's top-left
-                    offsetY: 0        // New: Offset from clinging character's top-left
+                    damageApplied: false,
+                    clingingTo: null,
+                    offsetX: 0,
+                    offsetY: 0
                 });
                 character.moveEffect.bees[i].image.src = './sprites/mini_bee.png';
             }
             displayMessage(`${character.name} unleashes a Swarm of Bees!`);
+            break;
+        case 'feeding_frenzy': // Shark's special move
+            character.moveEffect = {
+                type: 'feeding_frenzy',
+                duration: FEEDING_FRENZY_DURATION_FRAMES, // Use the constant
+                originalAttack: character.attack, // Store original attack for reset
+                originalAttackSpeed: character.speed // Store original speed for reset (attack speed)
+            };
+            // Apply buffs
+            character.speed *= FEEDING_FRENZY_ATTACK_SPEED_BOOST; // Increase attack speed (represented by character speed)
+            // Recalculate movement vector with new speed
+            const currentAngleFrenzy = Math.atan2(character.dy, character.dx);
+            const newSpeedMagnitudeFrenzy = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
+            character.dx = Math.cos(currentAngleFrenzy) * newSpeedMagnitudeFrenzy;
+            character.dy = Math.sin(currentAngleFrenzy) * newSpeedMagnitudeFrenzy;
+
+            displayMessage(`${character.name} entered a Feeding Frenzy!`);
             break;
     }
 }
@@ -398,7 +418,7 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
 
                             // Re-apply damage for clinging bees periodically
                             if (character.moveEffect.duration % 15 === 0 && !bee.damageApplied) { // Damage every ~15 frames for clinging
-                                if (bee.clingingTo.isAlive) { // Ensure target is still alive
+                                if (bee.clingingTo.isAlive) {
                                     const damage = SWARM_BEE_DAMAGE_PER_TICK;
                                     bee.clingingTo.takeDamage(damage, character.attack, character.name, allCharacters);
                                     character.damageDealt += damage;
@@ -465,7 +485,7 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                             // Make the bee cling to the target
                             bee.clingingTo = target;
                             // Calculate offset relative to target's top-left for varied clinging positions
-                            bee.offsetX = (bee.x - target.x) + (Math.random() - 0.5) * target.width * 0.3; // Small random offset within target
+                            bee.offsetX = (bee.x - target.x) + (Math.random() - 0.5) * target.width * 0.3;
                             bee.offsetY = (bee.y - target.y) + (Math.random() - 0.5) * target.height * 0.3;
                             bee.vx = 0; // Stop its movement
                             bee.vy = 0;
@@ -488,6 +508,27 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                 if (character.moveEffect.duration <= 0) {
                     character.moveActive = false;
                     character.moveEffect = null;
+                }
+            }
+            break;
+        case 'feeding_frenzy': // Update logic for Shark's Feeding Frenzy
+            if (character.moveEffect && character.moveEffect.type === 'feeding_frenzy') {
+                character.moveEffect.duration--;
+
+                // --- Removed Visual for Feeding Frenzy from here ---
+                // The visual effect (red pulsing border) is handled in Character.draw() based on `moveEffect.duration`
+
+                if (character.moveEffect.duration <= 0) {
+                    character.moveActive = false;
+                    character.moveEffect = null;
+                    // Reset character's stats
+                    character.speed = character.originalSpeed; // Reset speed (attack speed)
+                    // Recalculate movement vector with original speed
+                    const currentAngleReset = Math.atan2(character.dy, character.dx);
+                    const newSpeedMagnitudeReset = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
+                    character.dx = Math.cos(currentAngleReset) * newSpeedMagnitudeReset;
+                    character.dy = Math.sin(currentAngleReset) * newSpeedMagnitudeReset;
+                    displayMessage(`${character.name}'s Feeding Frenzy ended.`);
                 }
             }
             break;
