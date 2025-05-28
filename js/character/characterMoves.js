@@ -4,7 +4,9 @@ import {
     QUICKDRAW_HIT_CHANCE,
     MEDIC_PATCH_COOLDOWN,
     GHOST_BOO_DAMAGE,
-    ORIGINAL_SPEED_MAGNITUDE // Added import for ORIGINAL_SPEED_MAGNITUDE
+    ORIGINAL_SPEED_MAGNITUDE,
+    SWARM_DURATION_FRAMES,
+    SWARM_BEE_DAMAGE_PER_TICK
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -212,6 +214,37 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
             };
             displayMessage(`${character.name} lets out a spectral cry!`);
             break;
+        case 'swarm': // Queen Bee's special move
+            character.moveEffect = {
+                type: 'swarm',
+                bees: [],
+                duration: SWARM_DURATION_FRAMES,
+                target: nearestOpponent // The swarm will target the nearest opponent
+            };
+
+            // Create mini bees spawned randomly within Queen Bee's bounds (or slightly outside)
+            // with no initial velocity, letting flocking behavior take over.
+            const spawnRadius = character.width * 0.7; // Spawn within a radius around Queen Bee's center
+            for (let i = 0; i < 5; i++) {
+                const angleOffset = Math.random() * Math.PI * 2;
+                const distanceOffset = Math.random() * spawnRadius;
+
+                character.moveEffect.bees.push({
+                    x: character.x + character.width / 2 + Math.cos(angleOffset) * distanceOffset,
+                    y: character.y + character.height / 2 + Math.sin(angleOffset) * distanceOffset,
+                    vx: 0, // No initial velocity, let flocking decide
+                    vy: 0,
+                    size: 15 * CHARACTER_SCALE_FACTOR,
+                    image: new Image(),
+                    damageApplied: false, // To ensure damage is applied once per bee per tick
+                    clingingTo: null, // New: Reference to the character it's clinging to
+                    offsetX: 0,       // New: Offset from clinging character's top-left
+                    offsetY: 0        // New: Offset from clinging character's top-left
+                });
+                character.moveEffect.bees[i].image.src = './sprites/mini_bee.png';
+            }
+            displayMessage(`${character.name} unleashes a Swarm of Bees!`);
+            break;
     }
 }
 
@@ -338,18 +371,120 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
             }
             break;
         case 'boo':
-            if (character.moveEffect && character.moveEffect.type === 'boo_effect') {
-                if (!character.moveEffect.appliedDamage) {
-                    allCharacters.forEach(target => {
-                        if (target !== character && target.isAlive && !target.isPhasing && checkDistance(character, target) < character.moveEffect.radius) {
-                            const damage = GHOST_BOO_DAMAGE;
+            character.moveEffect = {
+                type: 'boo_effect',
+                radius: character.width * 2.0,
+                duration: 30,
+                appliedDamage: false
+            };
+            displayMessage(`${character.name} lets out a spectral cry!`);
+            break;
+        case 'swarm': // Update logic for Queen Bee's Swarm
+            if (character.moveEffect && character.moveEffect.type === 'swarm') {
+                character.moveEffect.duration--;
+
+                const target = character.moveEffect.target;
+                if (target && target.isAlive) {
+                    const trackingStrength = 0.05; // How strongly bees move towards the target
+                    const separationStrength = 0.1; // How strongly bees repel each other (increased for spread)
+                    const randomWanderStrength = 0.02; // Small random motion for organic look
+
+                    character.moveEffect.bees.forEach(bee => {
+                        // Handle clinging bees separately
+                        if (bee.clingingTo) {
+                            // Update bee's position to follow the clinging target
+                            bee.x = bee.clingingTo.x + bee.offsetX;
+                            bee.y = bee.clingingTo.y + bee.offsetY;
+
+                            // Re-apply damage for clinging bees periodically
+                            if (character.moveEffect.duration % 15 === 0 && !bee.damageApplied) { // Damage every ~15 frames for clinging
+                                if (bee.clingingTo.isAlive) { // Ensure target is still alive
+                                    const damage = SWARM_BEE_DAMAGE_PER_TICK;
+                                    bee.clingingTo.takeDamage(damage, character.attack, character.name, allCharacters);
+                                    character.damageDealt += damage;
+                                    bee.damageApplied = true;
+                                }
+                            }
+                            return; // Skip swarm movement logic for clinging bees
+                        }
+
+                        // Normal swarm behavior for non-clinging bees
+                        let totalForceX = 0;
+                        let totalForceY = 0;
+
+                        // 1. Force towards target
+                        const angleToTarget = Math.atan2(target.y - bee.y, target.x - bee.x);
+                        totalForceX += Math.cos(angleToTarget) * trackingStrength;
+                        totalForceY += Math.sin(angleToTarget) * trackingStrength;
+
+                        // 2. Separation from other bees
+                        character.moveEffect.bees.forEach(otherBee => {
+                            if (bee !== otherBee && !otherBee.clingingTo) { // Only separate from other non-clinging bees
+                                const dist = checkDistance(
+                                    {x: bee.x, y: bee.y, width: bee.size, height: bee.size},
+                                    {x: otherBee.x, y: otherBee.y, width: otherBee.size, height: otherBee.size}
+                                );
+                                if (dist < bee.size * 3) { // Repel if within 3x bee size
+                                    const angleAway = Math.atan2(bee.y - otherBee.y, bee.x - otherBee.x);
+                                    totalForceX += (Math.cos(angleAway) / dist) * separationStrength;
+                                    totalForceY += (Math.sin(angleAway) / dist) * separationStrength;
+                                }
+                            }
+                        });
+
+                        // 3. Random wander
+                        totalForceX += (Math.random() - 0.5) * randomWanderStrength;
+                        totalForceY += (Math.random() - 0.5) * randomWanderStrength;
+
+
+                        // Apply force to velocity
+                        bee.vx += totalForceX;
+                        bee.vy += totalForceY;
+
+                        // Limit bee speed (normalize velocity to a max speed)
+                        const currentBeeSpeed = Math.sqrt(bee.vx * bee.vx + bee.vy * bee.vy);
+                        const maxBeeSpeed = 7 * CHARACTER_SCALE_FACTOR; // Max movement speed for individual bees
+                        if (currentBeeSpeed > maxBeeSpeed) {
+                            bee.vx = (bee.vx / currentBeeSpeed) * maxBeeSpeed;
+                            bee.vy = (bee.vy / currentBeeSpeed) * maxBeeSpeed;
+                        } else if (currentBeeSpeed < 1 * CHARACTER_SCALE_FACTOR && currentBeeSpeed > 0) { // Ensure minimum movement
+                             bee.vx = (bee.vx / currentBeeSpeed) * (1 * CHARACTER_SCALE_FACTOR);
+                             bee.vy = (bee.vy / currentBeeSpeed) * (1 * CHARACTER_SCALE_FACTOR);
+                        }
+
+                        bee.x += bee.vx;
+                        bee.y += bee.vy;
+
+                        // Check for collision with target (only for non-clinging bees)
+                        if (!bee.damageApplied && !bee.clingingTo && checkDistance({x: bee.x, y: bee.y, width: bee.size, height: bee.size}, target) < target.width / 2) {
+                            const damage = SWARM_BEE_DAMAGE_PER_TICK;
                             target.takeDamage(damage, character.attack, character.name, allCharacters);
                             character.damageDealt += damage;
+                            bee.damageApplied = true;
+
+                            // Make the bee cling to the target
+                            bee.clingingTo = target;
+                            // Calculate offset relative to target's top-left for varied clinging positions
+                            bee.offsetX = (bee.x - target.x) + (Math.random() - 0.5) * target.width * 0.3; // Small random offset within target
+                            bee.offsetY = (bee.y - target.y) + (Math.random() - 0.5) * target.height * 0.3;
+                            bee.vx = 0; // Stop its movement
+                            bee.vy = 0;
+                            displayMessage(`A mini bee clung to ${target.name}!`);
                         }
                     });
-                    character.moveEffect.appliedDamage = true;
                 }
-                character.moveEffect.duration--;
+
+                // Reset damageApplied for next tick (applies to both moving and clinging bees)
+                // This ensures clinging bees can deal damage in subsequent ticks as well.
+                if (character.moveEffect.duration % 15 === 0) { // Reset for clinging bees every 15 frames for damage tick
+                    character.moveEffect.bees.forEach(bee => bee.damageApplied = false);
+                } else if (character.moveEffect.duration % 5 === 0) { // Reset for flying bees more frequently for smooth damage
+                     character.moveEffect.bees.forEach(bee => {
+                         if (!bee.clingingTo) bee.damageApplied = false;
+                     });
+                }
+
+
                 if (character.moveEffect.duration <= 0) {
                     character.moveActive = false;
                     character.moveEffect = null;

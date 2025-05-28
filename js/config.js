@@ -32,6 +32,12 @@ export const INVISIBILITY_DAMAGE_REDUCTION = 0.5; // Buffed: Character takes 50%
 export const INVISIBILITY_DODGE_BOOST = 0.3;    // Buffed: 30% additive boost to dodge chance
 export const GHOST_BOO_DAMAGE = 25; // New constant for Ghost's Boo move damage
 
+// Queen Bee specific constants
+export const SWARM_DURATION_FRAMES = 180; // Duration for Queen Bee's Swarm move
+export const SWARM_BEE_DAMAGE_PER_TICK = 5; // Damage per tick for each mini bee in Swarm
+export const HONEYCOMB_STUN_DURATION_FRAMES = 120; // Duration for Honeycomb stun
+export const HONEYCOMB_PROJECTILE_SPEED = 5; // Adjust as needed for projectile speed
+
 export const MAP_IMAGE_SOURCE = './sprites/map.png'; // New: Path to your map image
 
 export const IMAGE_SOURCES = [
@@ -53,4 +59,6 @@ export const IMAGE_SOURCES = [
       secondaryAbility: 'fortify', secondaryAbilityCooldown: 11000 },
     { name: 'Ghost', url: './sprites/ghost.png', move: 'boo', attack: 15, defense: 3, speed: 1.8,
       secondaryAbility: 'invisibility', secondaryAbilityCooldown: 10000 },
+    { name: 'Queen Bee', url: './sprites/queen_bee.png', move: 'swarm', attack: 12, defense: 8, speed: 1.3,
+      secondaryAbility: 'honeycomb', secondaryAbilityCooldown: 9000 },
 ];

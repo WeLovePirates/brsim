@@ -12,12 +12,13 @@ import {
     DODGE_DIRECTION_CHANGE_INTERVAL,
     ALL_LOW_HEALTH_RUSH_CHANCE,
     INVISIBILITY_DAMAGE_REDUCTION,
-    SECONDARY_ABILITY_DURATION_FRAMES // Added import for SECONDARY_ABILITY_DURATION_FRAMES
+    INVISIBILITY_DODGE_BOOST,
+    SECONDARY_ABILITY_DURATION_FRAMES
 } from '../config.js';
-import { displayMessage } from '../utils/displayUtils.js'; // Corrected syntax: removed '='
+import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
 import { handleSpecialMove, updateMoveEffect } from './characterMoves.js';
-import { handleSecondaryAbility, updateAbilityEffect } from './characterAbilities.js';
+import { handleSecondaryAbility, updateAbilityEffect } from './characterAbilities.js'; // Ensure updateAbilityEffect is imported
 
 export class Character {
     constructor(name, image, moveType, attack, defense, speed, scaleFactor, initialHealthOverride = INITIAL_HEALTH, secondaryAbilityType, secondaryAbilityCooldown, canvas) {
@@ -61,6 +62,10 @@ export class Character {
         this.isInvisible = false;
         this.originalAlpha = 1.0; // To store original drawing alpha
 
+        // New properties for Honeycomb ability
+        this.isStunned = false;
+        this.originalSpeedWhenStunned = null; // To store speed before stun
+
         this.kills = 0;
         this.damageDealt = 0;
         this.healingDone = 0;
@@ -83,6 +88,16 @@ export class Character {
      */
     update(characters, CHARACTER_SCALE_FACTOR) {
         if (!this.isAlive) return;
+
+        // Call updateAbilityEffect for this character BEFORE checking isStunned for movement,
+        // so that the stun duration can expire in this frame.
+        updateAbilityEffect(this, characters, CHARACTER_SCALE_FACTOR, this.canvas); // Now takes allCharacters and canvas
+
+        if (this.isStunned) { // If stunned, prevent movement and further ability activation
+            // Still update existing move effects (e.g., swarm)
+            updateMoveEffect(this, characters, CHARACTER_SCALE_FACTOR, this.canvas);
+            return; // Skip normal movement and ability activation
+        }
 
         const currentTime = Date.now();
         const aliveCharacters = characters.filter(char => char.isAlive);
@@ -195,12 +210,11 @@ export class Character {
 
         // Secondary ability activation
         if (Date.now() - this.lastSecondaryAbilityTime > this.secondaryAbilityCooldown) {
-            handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR);
+            handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas); // Pass canvas here
         }
 
-        // Update active move and ability effects
+        // Update active move effects (ability effects are updated at start of `update`)
         updateMoveEffect(this, characters, CHARACTER_SCALE_FACTOR, this.canvas);
-        updateAbilityEffect(this, CHARACTER_SCALE_FACTOR);
     }
 
     /**
@@ -220,6 +234,13 @@ export class Character {
         }
 
         this.ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+
+        // Draw stuck indicator
+        // Condition: Character is stunned AND it was stunned by honeycomb_stick effect
+        if (this.isStunned && this.secondaryAbilityActive && this.secondaryAbilityEffect && this.secondaryAbilityEffect.type === 'honeycomb_stick') {
+            this.ctx.fillStyle = 'rgba(255, 165, 0, 0.3)'; // Orange translucent
+            this.ctx.fillRect(this.x, this.y, this.width, this.height);
+        }
 
         // Reset alpha for drawing UI elements like health bar and name
         this.ctx.globalAlpha = this.originalAlpha;
@@ -318,6 +339,17 @@ export class Character {
                     this.ctx.fill();
                     this.ctx.restore();
                 }
+            } else if (this.moveType === 'swarm') { // Draw mini bees for swarm
+                if (this.moveEffect && this.moveEffect.type === 'swarm') {
+                    this.moveEffect.bees.forEach(bee => {
+                        if (bee.image.complete && bee.image.naturalWidth > 0) {
+                            this.ctx.save();
+                            this.ctx.globalAlpha = 0.8; // Bees are slightly transparent
+                            this.ctx.drawImage(bee.image, bee.x, bee.y, bee.size, bee.size);
+                            this.ctx.restore();
+                        }
+                    });
+                }
             }
         }
 
@@ -390,6 +422,16 @@ export class Character {
                     break;
                  case 'invisibility':
                     // Transparency is handled at the character drawing level
+                    break;
+                case 'honeycomb_projectile': // Draw the honeycomb projectile
+                    this.ctx.fillStyle = 'rgba(255, 220, 0, 0.7)'; // Yellow translucent
+                    this.ctx.beginPath();
+                    this.ctx.arc(this.secondaryAbilityEffect.x, this.secondaryAbilityEffect.y, this.secondaryAbilityEffect.radius, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    break;
+                case 'honeycomb_stick': // The visual of the stun itself
+                    // This is now handled by the 'Draw stuck indicator' block at the top of draw().
+                    // No additional drawing here for this specific effect type.
                     break;
             }
         }
