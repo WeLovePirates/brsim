@@ -23,6 +23,7 @@ let mapImage;
 let ctx;
 let canvas;
 let currentScreen = 'menu'; // 'menu', 'game', 'summary'
+let cachedProbabilities = []; // NEW: Cache probabilities for rendering
 
 // --- Fixed Timestep Variables ---
 const MS_PER_UPDATE = 1000 / 60; // Target 60 game logic updates per second (16.67ms per update)
@@ -108,8 +109,9 @@ export function setGameLoopDependencies(gameCanvas, context, initialCharacters, 
         }
     });
 
-    // Removed the initial requestAnimationFrame(gameLoop); call from here.
-    // It must be *inside* the gameLoop function itself for continuous animation.
+    // Start the game loop (which will then call requestAnimationFrame continuously)
+    // Removed from here, moved into the gameLoop function itself for recursive calls.
+    // The initial call will be handled by window.onload in main.js
 }
 
 /**
@@ -211,7 +213,7 @@ function drawMainMenu() {
     ctx.fillStyle = '#FFD700'; // Gold color
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('BRSIM', canvas.width / 2, canvas.height / 2 - 100 * CHARACTER_SCALE_FACTOR);
+    ctx.fillText('BATTLE ROYALE', canvas.width / 2, canvas.height / 2 - 100 * CHARACTER_SCALE_FACTOR);
 
     // Update button positions relative to canvas size for the menu
     menuButtons.start.y = canvas.height / 2 + 0;
@@ -234,10 +236,9 @@ function drawMainMenu() {
 function updateGameLogic() {
     const currentTime = Date.now();
 
-    // Update win probabilities periodically and draw
+    // Update win probabilities periodically and cache them for rendering
     if (currentTime - lastProbUpdateTime > PROB_UPDATE_INTERVAL) {
-        const probabilities = calculateWinProbabilities(characters);
-        drawProbabilityMenu(ctx, canvas, probabilities, CHARACTER_SCALE_FACTOR); // This call only updates internal state for drawing
+        cachedProbabilities = calculateWinProbabilities(characters); // Store in cache
         lastProbUpdateTime = currentTime;
     }
 
@@ -257,7 +258,6 @@ function updateGameLogic() {
     const aliveCharacters = characters.filter(char => char.isAlive);
     if (aliveCharacters.length <= 1 && gameRunning) {
         gameRunning = false;
-        // Do not cancel animationFrameId here, let the loop continue to draw summary
         gameEndTime = performance.now();
         currentScreen = 'summary'; // Transition to summary screen
 
@@ -278,7 +278,7 @@ function updateGameLogic() {
  * @param {DOMHighResTimeStamp} timestamp - The current time provided by requestAnimationFrame.
  */
 export function gameLoop(timestamp) {
-    // THIS LINE IS CRITICAL: It schedules the NEXT frame. It must be here!
+    // THIS LINE IS CRITICAL: It schedules the NEXT frame. It must be at the start!
     animationFrameId = requestAnimationFrame(gameLoop);
 
     // Calculate time since last frame
@@ -313,14 +313,11 @@ export function gameLoop(timestamp) {
     if (currentScreen === 'menu') {
         drawMainMenu();
     } else if (currentScreen === 'game') {
-        // Redraw probabilities even if not updated (for smoother animation)
-        const probabilities = calculateWinProbabilities(characters);
-        drawProbabilityMenu(ctx, canvas, probabilities, CHARACTER_SCALE_FACTOR);
-
         // Draw all characters (their state is updated by updateGameLogic)
         characters.forEach(char => char.draw(CHARACTER_SCALE_FACTOR));
 
-        // Draw the current message (e.g., "Battle started!")
+        // Draw UI elements *after* game objects to layer them on top
+        drawProbabilityMenu(ctx, canvas, cachedProbabilities, CHARACTER_SCALE_FACTOR); // Use cached probabilities
         drawMessageBox(ctx, canvas, displayMessage.currentMessage, CHARACTER_SCALE_FACTOR);
 
     } else if (currentScreen === 'summary') {
@@ -358,7 +355,6 @@ export function startGame(requestFullscreenOnStart) {
     // Reset fixed timestep variables
     deltaTime = 0;
     lastFrameTimeMs = performance.now(); // Reset lastFrameTimeMs here
-    // lastGameUpdateTimeMs = performance.now(); // This line is not strictly needed for logic, deltaTime handles it
 
     characters.forEach(char => {
         char.health = char.maxHealth;
@@ -398,6 +394,8 @@ export function startGame(requestFullscreenOnStart) {
     displayMessage("Battle started with special moves and stats!");
 
     lastProbUpdateTime = Date.now();
+    // Force an initial probability calculation and cache it immediately
+    cachedProbabilities = calculateWinProbabilities(characters);
 }
 
 /**
