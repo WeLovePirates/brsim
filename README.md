@@ -13,7 +13,7 @@ BRSim is a lightweight, browser-based simulation showcasing a dynamic battle roy
 
 1.  **Clone the Repository:**
     ```bash
-    git clone [Your Repository URL Here]
+    git clone https://github.com/kitten99/br
     ```
 2.  **Navigate to the Project Directory:**
     ```bash
@@ -39,11 +39,3 @@ BRSim is a lightweight, browser-based simulation showcasing a dynamic battle roy
 ## Development
 
 Feel free to explore the code, modify existing characters, or create entirely new ones. The design prioritizes code reusability to make adding new content straightforward. Check the `js/config.js` file to see how new characters are defined and `characterMoves.js` and `characterAbilities.js` to understand how their abilities are implemented.
-
-## Contributing
-
-(Optional: Add guidelines for contributing if this is a public repo)
-
-## License
-
-(Optional: Add your project's license here, e.g., MIT, Apache 2.0, etc.)
