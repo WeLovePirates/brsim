@@ -4,41 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>brsim</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="./css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden; /* Hide scrollbars, especially in fullscreen */
+            background-color: #333; /* Dark background for overall page */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh; /* Ensure body takes full viewport height */
+        }
+        canvas {
+            display: block; /* Remove extra space below canvas */
+            background-color: #000; /* Fallback background for canvas */
+            /* Add border for aesthetic if not fullscreen */
+            border: 2px solid #555;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            /* These will be overridden by JS for positioning */
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>brsim</h1>
-        <div id="messageBox" class="text-gray-700">Loading game...</div>
-        <canvas id="gameCanvas"></canvas>
-        <div id="buttonGroup" class="button-group">
-            <button id="startButton" class="button-style start-button">Start Game</button>
-            <button id="resetButton" class="button-style reset-button">Reset Game</button>
-            <div class="flex items-center">
-                <input type="checkbox" id="fullscreenToggle" class="mr-2">
-                <label for="fullscreenToggle" class="text-white">Fullscreen</label>
-            </div>
-        </div>
-    </div>
-
-    <script type="module" src="js/config.js"></script>
-
-    <script type="module" src="js/utils/displayUtils.js"></script>
-    <script type="module" src="js/utils/mathUtils.js"></script>
-    <script type="module" src="js/utils/collisionUtils.js"></script>
-
-    <script type="module" src="js/character/characterMoves.js"></script>
-    <script type="module" src="js/character/characterAbilities.js"></script>
-    <script type="module" src="js/character/Character.js"></script>
-
-    <script type="module" src="js/ui/uiElements.js"></script>
-    <script type="module" src="js/ui/uiUpdates.js"></script>
-    <script type="module" src="js/game/gameLogic.js"></script>
-    <script type="module" src="js/game/gameLoop.js"></script>
-    <script type="module" src="js/game/gameInit.js"></script>
-
-    <script type="module" src="js/main.js"></script>
+    <canvas id="gameCanvas"></canvas>
+    <script type="module" src="./js/main.js"></script>
 </body>
 </html>
