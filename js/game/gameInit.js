@@ -3,9 +3,8 @@
 import { IMAGE_SOURCES, MAP_IMAGE_SOURCE, ORIGINAL_SPEED_MAGNITUDE } from '../config.js';
 import { Character } from '../character/Character.js';
 import { displayMessage } from '../utils/displayUtils.js';
-import { setGameLoopDependencies, startGame, resetGame } from './gameLoop.js';
-import { initUIMechanics, updateCanvasSize, setCalculateWinProbabilitiesFunction, updateWinProbabilityMenu, CHARACTER_SCALE_FACTOR } from '../ui/uiUpdates.js'; // Added updateWinProbabilityMenu
-import { calculateWinProbabilities } from './gameLogic.js';
+import { setGameLoopDependencies, startGame, resetGame, showMainMenu, toggleFullscreen } from './gameLoop.js'; // Added toggleFullscreen
+import { updateCanvasSize, setCalculateWinProbabilitiesFunction, CHARACTER_SCALE_FACTOR } from '../ui/uiUpdates.js'; // Removed updateWinProbabilityMenu
 
 let characters = [];
 let mapImage;
@@ -19,12 +18,21 @@ export async function initGame() {
     canvas = document.getElementById('gameCanvas');
     ctx = canvas.getContext('2d');
 
-    // Set the canvas and context for UI updates
-    setCalculateWinProbabilitiesFunction(calculateWinProbabilities);
-    initUIMechanics(canvas, () => startGame(document.getElementById('fullscreenToggle').checked), resetGame);
-    updateCanvasSize(canvas, false); // Initial canvas size setup
+    // Set initial canvas size and scale factor
+    // We now determine fullscreen status and update size from main.js onload
+    // and gameLoop.js handles fullscreen changes.
+    updateCanvasSize(canvas, document.fullscreenElement);
 
-    displayMessage("Loading characters and map...");
+    // Set the function to calculate win probabilities
+    setCalculateWinProbabilitiesFunction(calculateWinProbabilities);
+
+    // initUIMechanics now only sets up the canvas size and event listeners for fullscreen.
+    // It no longer creates/manages external buttons.
+    // The canvas click listener is now part of gameLoop.js
+    // We don't need a direct initUIMechanics call for start/reset callbacks here anymore,
+    // as button actions are handled directly in gameLoop.js's canvas click handler.
+
+    displayMessage("Loading game assets...");
 
     mapImage = new Image();
     mapImage.src = MAP_IMAGE_SOURCE;
@@ -32,6 +40,7 @@ export async function initGame() {
         mapImage.onload = resolve;
         mapImage.onerror = () => {
             console.error(`Failed to load map image: ${MAP_IMAGE_SOURCE}`);
+            // Fallback image for map in case of load error
             mapImage.src = `https://placehold.co/${canvas.width}x${canvas.height}/000000/FFFFFF?text=MAP+LOAD+ERROR`;
             mapImage.onload = resolve;
             mapImage.onerror = reject;
@@ -52,10 +61,11 @@ export async function initGame() {
                 health: src.health,
                 secondaryAbility: src.secondaryAbility,
                 secondaryAbilityCooldown: src.secondaryAbilityCooldown,
-                isDummy: src.isDummy || false // Ensure isDummy is handled
+                isDummy: src.isDummy || false
             });
             img.onerror = () => {
                 console.error(`Failed to load image: ${src.url}`);
+                // Fallback image for character in case of load error
                 img.src = `https://placehold.co/80x80/ff0000/FFFFFF?text=LOAD+ERROR`;
                 img.onload = () => resolve({
                     name: src.name,
@@ -81,17 +91,21 @@ export async function initGame() {
         data.attack,
         data.defense,
         data.speed,
-        CHARACTER_SCALE_FACTOR, // Use the dynamically calculated scale factor
+        CHARACTER_SCALE_FACTOR,
         data.health,
         data.secondaryAbility,
         data.secondaryAbilityCooldown,
-        canvas // Pass the canvas to the Character constructor
+        canvas
     ));
 
     // Set dependencies for the game loop
     setGameLoopDependencies(canvas, ctx, characters, mapImage);
 
-    resetGame(); // Perform an initial reset to place characters
-    displayMessage("Characters and map loaded! Click 'Start Game' to begin.");
-    updateWinProbabilityMenu(characters);
+    // Show the main menu initially
+    showMainMenu();
+    displayMessage("Game assets loaded. Click 'Start Game' to begin!");
 }
+
+// Moved from gameInit.js:
+// calculateWinProbabilities must be imported and set for UI functions to work.
+import { calculateWinProbabilities } from './gameLogic.js';

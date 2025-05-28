@@ -1,15 +1,111 @@
 // js/ui/uiUpdates.js
 
 import { REFERENCE_GAME_WIDTH } from '../config.js';
+import { displayMessage } from '../utils/displayUtils.js';
+import { playAgainButton } from '../game/gameLoop.js'; // Import the shared button object
 
-let h1Element;
-let buttonGroupElement;
-let winProbabilityMenu;
-let gameSummaryOverlay;
-export let CHARACTER_SCALE_FACTOR = 1; // Exported for use in Character class and game loop
+export let CHARACTER_SCALE_FACTOR = 1;
 
-// This function will be set by `gameInit.js`
 let _calculateWinProbabilities = null;
+let probabilityMenuVisible = true; // State for probability menu visibility
+
+// For in-canvas scrolling, these need to persist between frames
+let summaryScrollYOffset = 0;
+let isDraggingSummary = false;
+let lastMouseY = 0;
+
+// Named functions for event listeners to allow proper removal
+function handleSummaryWheel(event) {
+    const canvas = event.currentTarget; // Get canvas from event target
+    const rect = canvas.getBoundingClientRect();
+    const summaryBoxWidth = canvas.width * 0.7;
+    const summaryBoxHeight = canvas.height * 0.55; // Must match displayGameSummary
+    const summaryBoxX = (canvas.width - summaryBoxWidth) / 2;
+    const summaryBoxY = 180 * CHARACTER_SCALE_FACTOR;
+
+    if (event.clientX >= summaryBoxX && event.clientX <= summaryBoxX + summaryBoxWidth &&
+        event.clientY >= summaryBoxY && event.clientY <= summaryBoxY + summaryBoxHeight) {
+        event.preventDefault(); // Prevent page scroll
+        const totalContentHeight = playAgainButton._totalSummaryContentHeight; // Use cached total height
+        const maxScrollY = Math.max(0, totalContentHeight - summaryBoxHeight);
+        summaryScrollYOffset += event.deltaY * 0.5; // Adjust scroll speed
+        summaryScrollYOffset = Math.max(0, Math.min(summaryScrollYOffset, maxScrollY));
+    }
+}
+
+function handleSummaryMouseDown(event) {
+    const canvas = event.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+    const summaryBoxWidth = canvas.width * 0.7;
+    const summaryBoxHeight = canvas.height * 0.55;
+    const summaryBoxX = (canvas.width - summaryBoxWidth) / 2;
+    const summaryBoxY = 180 * CHARACTER_SCALE_FACTOR;
+
+    if (event.clientX >= summaryBoxX && event.clientX <= summaryBoxX + summaryBoxWidth &&
+        event.clientY >= summaryBoxY && event.clientY <= summaryBoxY + summaryBoxHeight) {
+        isDraggingSummary = true;
+        lastMouseY = event.clientY;
+        event.preventDefault(); // Prevent text selection etc.
+    }
+}
+
+function handleSummaryMouseMove(event) {
+    if (isDraggingSummary) {
+        const canvas = event.currentTarget;
+        const totalContentHeight = playAgainButton._totalSummaryContentHeight;
+        const summaryBoxHeight = canvas.height * 0.55;
+        const maxScrollY = Math.max(0, totalContentHeight - summaryBoxHeight);
+
+        const deltaY = event.clientY - lastMouseY;
+        summaryScrollYOffset -= deltaY; // Invert for natural drag direction
+        summaryScrollYOffset = Math.max(0, Math.min(summaryScrollYOffset, maxScrollY));
+        lastMouseY = event.clientY;
+    }
+}
+
+function handleSummaryMouseUp() {
+    isDraggingSummary = false;
+}
+
+function handleSummaryMouseOut() { // Stop dragging if mouse leaves canvas
+    isDraggingSummary = false;
+}
+
+/**
+ * Adds event listeners for summary screen scrolling/dragging.
+ * @param {HTMLCanvasElement} canvas - The game canvas.
+ */
+export function addSummaryEventListeners(canvas) {
+    // Ensure listeners are only added once
+    if (!canvas._summaryListenersAdded) {
+        canvas.addEventListener('wheel', handleSummaryWheel, { passive: false });
+        canvas.addEventListener('mousedown', handleSummaryMouseDown);
+        canvas.addEventListener('mousemove', handleSummaryMouseMove);
+        canvas.addEventListener('mouseup', handleSummaryMouseUp);
+        canvas.addEventListener('mouseout', handleSummaryMouseOut); // Use mouseout on canvas itself
+
+        canvas._summaryListenersAdded = true;
+        summaryScrollYOffset = 0; // Reset scroll on entering summary
+    }
+}
+
+/**
+ * Removes event listeners for summary screen scrolling/dragging.
+ * @param {HTMLCanvasElement} canvas - The game canvas.
+ */
+export function removeSummaryEventListeners(canvas) {
+    if (canvas._summaryListenersAdded) {
+        canvas.removeEventListener('wheel', handleSummaryWheel);
+        canvas.removeEventListener('mousedown', handleSummaryMouseDown);
+        canvas.removeEventListener('mousemove', handleSummaryMouseMove);
+        canvas.removeEventListener('mouseup', handleSummaryMouseUp);
+        canvas.removeEventListener('mouseout', handleSummaryMouseOut);
+
+        canvas._summaryListenersAdded = false;
+        summaryScrollYOffset = 0; // Reset scroll position for next time
+    }
+}
+
 
 /**
  * Sets the function to calculate win probabilities, provided by gameLogic.
@@ -21,56 +117,49 @@ export function setCalculateWinProbabilitiesFunction(func) {
 
 /**
  * Updates the canvas size based on window dimensions and fullscreen status.
- * Adjusts UI element visibility accordingly.
+ * Now primarily handles scaling and responsiveness for the canvas itself.
  * @param {HTMLCanvasElement} canvas - The game canvas element.
  * @param {boolean} isFullScreen - True if the game is in fullscreen mode.
  */
 export function updateCanvasSize(canvas, isFullScreen = false) {
-    h1Element = document.querySelector('h1');
-    const messageBox = document.getElementById('messageBox');
-    buttonGroupElement = document.getElementById('buttonGroup');
-    const fullscreenToggle = document.getElementById('fullscreenToggle');
-
     let canvasWidth, canvasHeight;
 
     if (isFullScreen) {
         canvasWidth = window.innerWidth;
         canvasHeight = window.innerHeight;
-
-        if (h1Element) h1Element.style.display = 'none';
-        if (messageBox) messageBox.style.display = 'none';
-        if (buttonGroupElement) buttonGroupElement.style.display = 'none';
-
-        if (winProbabilityMenu && gameSummaryOverlay && gameSummaryOverlay.style.opacity === '0') {
-            winProbabilityMenu.style.display = 'none';
-        }
-
+        canvas.style.position = 'static';
+        canvas.style.left = '0';
+        canvas.style.top = '0';
+        canvas.style.transform = 'none';
     } else {
-        if (h1Element) h1Element.style.display = 'block';
-        if (messageBox) messageBox.style.display = 'flex';
-        if (buttonGroupElement) buttonGroupElement.style.display = 'flex';
-        if (winProbabilityMenu && gameSummaryOverlay && gameSummaryOverlay.style.opacity === '0') {
-            winProbabilityMenu.style.display = 'block';
-        }
-
         const viewportHeight = window.innerHeight;
         const viewportWidth = window.innerWidth;
 
-        const h1Height = h1Element ? h1Element.offsetHeight : 0;
-        const messageBoxHeight = messageBox ? messageBox.offsetHeight : 0;
-        const buttonGroupHeight = buttonGroupElement ? buttonGroupElement.offsetHeight : 0;
-
-        const verticalBuffer = 120;
-        canvasHeight = viewportHeight - (h1Height + messageBoxHeight + buttonGroupHeight + verticalBuffer);
-
         const horizontalBuffer = 60;
+        const verticalBuffer = 60;
+
         canvasWidth = viewportWidth - horizontalBuffer;
+        canvasHeight = viewportHeight - verticalBuffer;
+
+        const targetAspectRatio = REFERENCE_GAME_WIDTH / 700;
+        const currentAspectRatio = canvasWidth / canvasHeight;
+
+        if (currentAspectRatio > targetAspectRatio) {
+            canvasWidth = canvasHeight * targetAspectRatio;
+        } else {
+            canvasHeight = canvasWidth / targetAspectRatio;
+        }
 
         if (canvasHeight < 250) canvasHeight = 250;
         if (canvasWidth < 400) canvasWidth = 400;
 
         if (canvasHeight > 800) canvasHeight = 800;
-        if (canvasWidth > 1000) canvasWidth = 1000;
+        if (canvasWidth > 1200) canvasWidth = 1200;
+
+        canvas.style.position = 'absolute';
+        canvas.style.left = '50%';
+        canvas.style.top = '50%';
+        canvas.style.transform = 'translate(-50%, -50%)';
     }
 
     canvas.height = canvasHeight;
@@ -83,64 +172,157 @@ export function updateCanvasSize(canvas, isFullScreen = false) {
 }
 
 /**
- * Updates the content of the win probability menu.
- * @param {Array<Character>} characters - The array of character objects.
+ * Draws the win probability menu on the canvas.
+ * @param {CanvasRenderingContext2D} ctx - The 2D rendering context.
+ * @param {HTMLCanvasElement} canvas - The game canvas.
+ * @param {Array<object>} probabilities - An array of objects with character name and win probability.
+ * @param {number} scaleFactor - The current character scale factor.
  */
-export function updateWinProbabilityMenu(characters) {
-    if (!winProbabilityMenu || !_calculateWinProbabilities) return;
+export function drawProbabilityMenu(ctx, canvas, probabilities, scaleFactor) {
+    if (!probabilityMenuVisible) return;
 
-    if (!document.fullscreenElement || (winProbabilityMenu.style.display === 'block' && gameSummaryOverlay.style.opacity === '0')) {
-        winProbabilityMenu.innerHTML = '';
+    const padding = 10 * scaleFactor;
+    const lineHeight = 20 * scaleFactor;
+    const titleHeight = 25 * scaleFactor;
+    const minHeight = 50 * scaleFactor; // Minimum height for the box
 
-        const probabilities = _calculateWinProbabilities(characters);
+    const numPlayers = probabilities.length;
+    let requiredContentHeight = titleHeight + (numPlayers * lineHeight);
+    if (numPlayers === 0) requiredContentHeight += lineHeight; // For "No active players" message
+    else if (numPlayers === 1) requiredContentHeight += lineHeight; // For "X wins!" message
 
-        if (probabilities.length === 0) {
-            winProbabilityMenu.textContent = 'No active players.';
-            winProbabilityMenu.classList.add('text-gray-500');
-        } else if (probabilities.length === 1) {
-            winProbabilityMenu.innerHTML = `<div class="font-bold text-green-700">${probabilities[0].name} wins!</div>`;
-        } else {
-            const title = document.createElement('div');
-            title.textContent = 'Win Probabilities:';
-            title.classList.add('font-bold', 'mb-2', 'text-gray-800');
-            winProbabilityMenu.appendChild(title);
+    const menuHeight = Math.max(minHeight, requiredContentHeight + padding * 2);
+    const menuWidth = 180 * scaleFactor; // Fixed width for simplicity
 
-            probabilities.forEach(probData => {
-                const p = document.createElement('p');
-                p.classList.add('text-sm', 'text-gray-700');
-                p.textContent = `${probData.name}: ${probData.probability.toFixed(1)}%`;
-                winProbabilityMenu.appendChild(p);
-            });
-        }
+    const menuX = canvas.width - menuWidth - padding;
+    const menuY = padding;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(menuX, menuY, menuWidth, menuHeight);
+
+    ctx.strokeStyle = '#4a5568';
+    ctx.lineWidth = 2 * scaleFactor;
+    ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
+
+    ctx.font = `${16 * scaleFactor}px 'Inter', sans-serif`;
+    ctx.fillStyle = '#e2e8f0';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Win Probabilities:', menuX + padding, menuY + padding);
+
+    let currentY = menuY + titleHeight + padding;
+
+    if (probabilities.length === 0) {
+        ctx.font = `${12 * scaleFactor}px 'Inter', sans-serif`;
+        ctx.fillStyle = '#ccc';
+        ctx.fillText('No active players.', menuX + padding, currentY);
+    } else if (probabilities.length === 1) {
+        ctx.font = `${14 * scaleFactor}px 'Inter', sans-serif`;
+        ctx.fillStyle = '#22c55e';
+        ctx.fillText(`${probabilities[0].name}: 100.0%`, menuX + padding, currentY);
+    } else {
+        probabilities.sort((a, b) => b.probability - a.probability);
+
+        probabilities.forEach(probData => {
+            ctx.font = `${12 * scaleFactor}px 'Inter', sans-serif`;
+            ctx.fillStyle = '#cbd5e0';
+            ctx.fillText(`${probData.name}: ${probData.probability.toFixed(1)}%`, menuX + padding, currentY);
+            currentY += lineHeight;
+        });
     }
 }
 
+drawProbabilityMenu.isVisible = probabilityMenuVisible;
+drawProbabilityMenu.show = () => { probabilityMenuVisible = true; drawProbabilityMenu.isVisible = true; };
+drawProbabilityMenu.hide = () => { probabilityMenuVisible = false; drawProbabilityMenu.isVisible = false; };
+
+
 /**
- * Displays the game summary overlay with character statistics.
+ * Draws the message box on the canvas.
+ * @param {CanvasRenderingContext2D} ctx - The 2D rendering context.
+ * @param {HTMLCanvasElement} canvas - The game canvas.
+ * @param {string} message - The message to display.
+ * @param {number} scaleFactor - The current character scale factor.
+ */
+export function drawMessageBox(ctx, canvas, message, scaleFactor) {
+    if (!message) return;
+
+    const boxWidth = 400 * scaleFactor;
+    const boxHeight = 40 * scaleFactor;
+    const boxX = (canvas.width / 2) - (boxWidth / 2);
+    const boxY = 10 * scaleFactor;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+
+    ctx.strokeStyle = '#4a5568';
+    ctx.lineWidth = 2 * scaleFactor;
+    ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+    ctx.font = `${16 * scaleFactor}px 'Inter', sans-serif`;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(message, boxX + (boxWidth / 2), boxY + (boxHeight / 2));
+}
+
+/**
+ * Draws a button on the canvas.
+ * @param {CanvasRenderingContext2D} ctx - The 2D rendering context.
+ * @param {object} button - Button configuration. Must include x, y, width, height, text.
+ * @param {number} scaleFactor - The current character scale factor.
+ */
+function drawButton(ctx, button, scaleFactor) {
+    const scaledWidth = button.width * scaleFactor;
+    const scaledHeight = button.height * scaleFactor;
+    const scaledX = button.x;
+    const scaledY = button.y;
+
+    ctx.fillStyle = '#1a202c';
+    ctx.fillRect(scaledX, scaledY, scaledWidth, scaledHeight);
+
+    ctx.strokeStyle = '#4a5568';
+    ctx.lineWidth = 2 * scaleFactor;
+    ctx.strokeRect(scaledX, scaledY, scaledWidth, scaledHeight);
+
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = `${20 * scaleFactor}px 'Inter', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(button.text, scaledX + scaledWidth / 2, scaledY + scaledHeight / 2);
+
+    button.currentX = scaledX;
+    button.currentY = scaledY;
+    button.currentWidth = scaledWidth;
+    button.currentHeight = scaledHeight;
+}
+
+/**
+ * Displays the game summary overlay with character statistics directly on the canvas.
+ * Now includes a scrollable area for stats and a "Play Again" button.
  * @param {Array<Character>} characters - The array of character objects.
  * @param {number} gameStartTime - The timestamp when the game started.
  * @param {number} gameEndTime - The timestamp when the game ended.
+ * @param {HTMLCanvasElement} canvas - The game canvas.
+ * @param {CanvasRenderingContext2D} ctx - The 2D rendering context.
+ * @param {object} playAgainButtonObject - The shared button object from gameLoop.js to update its position.
  */
-export function displayGameSummary(characters, gameStartTime, gameEndTime) {
-    const summaryPanel = gameSummaryOverlay.querySelector('#summaryPanel');
-    const statsContainer = summaryPanel.querySelector('#statsContainer');
-    statsContainer.innerHTML = '';
+export function displayGameSummary(characters, gameStartTime, gameEndTime, canvas, ctx, playAgainButtonObject) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    summaryPanel.classList.remove('active');
-    gameSummaryOverlay.style.opacity = '0';
-    gameSummaryOverlay.style.pointerEvents = 'none';
-
-    void summaryPanel.offsetWidth; // Force reflow
-
-    const startButton = document.getElementById('startButton');
+    ctx.font = `${40 * CHARACTER_SCALE_FACTOR}px 'Press Start 2P'`;
+    ctx.fillStyle = '#FFD700';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Battle Results', canvas.width / 2, 80 * CHARACTER_SCALE_FACTOR);
 
     const durationMs = gameEndTime - gameStartTime;
     const durationSeconds = (durationMs / 1000).toFixed(1);
 
-    const durationP = document.createElement('p');
-    durationP.classList.add('text-gray-700', 'text-lg');
-    durationP.innerHTML = `<span class="font-bold">Game Duration:</span> ${durationSeconds} seconds`;
-    statsContainer.appendChild(durationP);
+    ctx.font = `${20 * CHARACTER_SCALE_FACTOR}px 'Inter', sans-serif`;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(`Game Duration: ${durationSeconds} seconds`, canvas.width / 2, 140 * CHARACTER_SCALE_FACTOR);
 
     const rankedCharacters = [];
     let winner = null;
@@ -171,98 +353,70 @@ export function displayGameSummary(characters, gameStartTime, gameEndTime) {
         return b_score - a_score;
     });
 
+    // --- Draw scrollable summary area ---
+    const summaryBoxWidth = canvas.width * 0.7;
+    const summaryBoxHeight = canvas.height * 0.55; // Adjusted height
+    const summaryBoxX = (canvas.width - summaryBoxWidth) / 2;
+    const summaryBoxY = 180 * CHARACTER_SCALE_FACTOR;
+
+    const offscreenCanvas = document.createElement('canvas');
+    const offscreenCtx = offscreenCanvas.getContext('2d');
+    offscreenCanvas.width = summaryBoxWidth;
+
+    let contentLineHeight = 65 * CHARACTER_SCALE_FACTOR;
+    let totalContentHeight = rankedCharacters.length * contentLineHeight;
+    offscreenCanvas.height = Math.max(summaryBoxHeight, totalContentHeight);
+
+    // Cache total content height for scroll logic. This is read by handleSummaryWheel/MouseMove
+    playAgainButtonObject._totalSummaryContentHeight = totalContentHeight;
+
+
+    let currentContentY = 0;
+
     rankedCharacters.forEach((data, index) => {
         const char = data.char;
-        const rankP = document.createElement('p');
-        rankP.classList.add('text-gray-800', 'font-bold', 'text-xl', 'mb-2', 'mt-4');
-        rankP.textContent = `#${index + 1} - ${char.name} ${char === winner ? '(Winner!)' : ''}`;
-        statsContainer.appendChild(rankP);
+        offscreenCtx.font = `${22 * CHARACTER_SCALE_FACTOR}px 'Press Start 2P'`;
+        offscreenCtx.fillStyle = '#e2e8f0';
+        offscreenCtx.textAlign = 'center';
+        offscreenCtx.textBaseline = 'middle';
+        offscreenCtx.fillText(`#${index + 1} - ${char.name} ${char === winner ? '(Winner!)' : ''}`, offscreenCanvas.width / 2, currentContentY + (20 * CHARACTER_SCALE_FACTOR));
 
-        const charStatsP = document.createElement('p');
-        charStatsP.classList.add('text-gray-700', 'ml-6', 'mb-4', 'text-base');
-        charStatsP.innerHTML = `
-            Health Remaining: ${char.health.toFixed(0)}<br>
-            Time Alive: ${data.timeAliveSeconds} seconds<br>
-            Kills: ${char.kills}<br>
-            Damage Dealt: ${char.damageDealt.toFixed(0)}<br>
-            Healing Done: ${char.healingDone.toFixed(0)}
-        `;
-        statsContainer.appendChild(charStatsP);
+        offscreenCtx.font = `${16 * CHARACTER_SCALE_FACTOR}px 'Inter', sans-serif`;
+        offscreenCtx.fillStyle = '#cbd5e0';
+        offscreenCtx.fillText(`Health: ${char.health.toFixed(0)} | Time Alive: ${data.timeAliveSeconds}s`, offscreenCanvas.width / 2, currentContentY + (45 * CHARACTER_SCALE_FACTOR));
+        offscreenCtx.fillText(`Kills: ${char.kills} | Damage: ${char.damageDealt.toFixed(0)} | Healing: ${char.healingDone.toFixed(0)}`, offscreenCanvas.width / 2, currentContentY + (60 * CHARACTER_SCALE_FACTOR));
+        currentContentY += contentLineHeight;
     });
 
-    const messageBox = document.getElementById('messageBox');
-    if (messageBox) messageBox.textContent = '';
-    if (startButton) startButton.disabled = false;
+    // Add event listeners for summary scrolling only once, when the summary screen is initially set up.
+    // This is called from gameLoop, so we need to ensure the `addSummaryEventListeners` is managed
+    // such that it's called ONCE upon currentScreen transition to 'summary'.
+    // `gameLoop.js` will handle calling add/removeSummaryEventListeners at the correct state transitions.
 
-    gameSummaryOverlay.style.opacity = '1';
-    gameSummaryOverlay.style.pointerEvents = 'all';
+    // Draw the clipped portion of the offscreen canvas onto the main canvas
+    ctx.drawImage(offscreenCanvas,
+                  0, summaryScrollYOffset, // Source X, Y on offscreen canvas (controlled by scroll)
+                  offscreenCanvas.width, summaryBoxHeight, // Source Width, Height (what we see)
+                  summaryBoxX, summaryBoxY, // Destination X, Y on main canvas
+                  summaryBoxWidth, summaryBoxHeight); // Destination Width, Height
 
-    setTimeout(() => {
-        summaryPanel.classList.add('active');
-    }, 50);
 
-    if (document.fullscreenElement && winProbabilityMenu) {
-        winProbabilityMenu.style.display = 'none';
-    }
+    ctx.strokeStyle = '#4a5568';
+    ctx.lineWidth = 3 * CHARACTER_SCALE_FACTOR;
+    ctx.strokeRect(summaryBoxX, summaryBoxY, summaryBoxWidth, summaryBoxHeight);
+
+    // --- Draw the "Play Again" button ---
+    playAgainButtonObject.x = canvas.width / 2 - (playAgainButtonObject.width * CHARACTER_SCALE_FACTOR) / 2;
+    playAgainButtonObject.y = canvas.height - 80 * CHARACTER_SCALE_FACTOR;
+
+    drawButton(ctx, playAgainButtonObject, CHARACTER_SCALE_FACTOR);
 }
 
 /**
- * Initializes UI mechanics, including creating elements and setting up event listeners.
+ * Initializes UI mechanics. Now primarily sets up the canvas and resize listener.
+ * No longer creates external buttons or probability menu.
  * @param {HTMLCanvasElement} canvas - The game canvas.
- * @param {function} startCallback - Function to call when the start button is clicked.
- * @param {function} resetCallback - Function to call when the reset button is clicked.
  */
-export function initUIMechanics(canvas, startCallback, resetCallback) {
-    // Import and create UI elements
-    import('./uiElements.js').then(module => {
-        winProbabilityMenu = module.createWinProbabilityMenu();
-        gameSummaryOverlay = module.createGameSummaryOverlay();
-
-        const startButton = document.getElementById('startButton');
-        const resetButton = document.getElementById('resetButton');
-        const fullscreenToggle = document.getElementById('fullscreenToggle');
-
-        startButton.addEventListener('click', startCallback);
-        resetButton.addEventListener('click', resetCallback);
-
-        window.addEventListener('resize', () => {
-            if (!document.fullscreenElement) {
-                updateCanvasSize(canvas, false);
-                resetCallback();
-            }
-        });
-
-        document.addEventListener('keydown', (event) => {
-            if (document.fullscreenElement && winProbabilityMenu && gameSummaryOverlay.style.opacity === '0') {
-                if (event.key === 'p' || event.key === 'P') {
-                    if (winProbabilityMenu.style.display === 'none') {
-                        winProbabilityMenu.style.display = 'block';
-                    } else {
-                        winProbabilityMenu.style.display = 'none';
-                    }
-                }
-            }
-        });
-
-        const handleFullscreenChange = () => {
-            if (fullscreenToggle.checked) {
-                if (document.fullscreenElement) {
-                    updateCanvasSize(canvas, true);
-                } else {
-                    updateCanvasSize(canvas, false);
-                    resetCallback();
-                }
-            } else {
-                if (!document.fullscreenElement) {
-                     updateCanvasSize(canvas, false);
-                     resetCallback();
-                }
-            }
-        };
-
-        document.addEventListener('fullscreenchange', handleFullscreenChange);
-        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
-        document.addEventListener('msfullscreenchange', handleFullscreenChange);
-    });
+export function initUIMechanics(canvas) {
+    updateCanvasSize(canvas, document.fullscreenElement);
 }

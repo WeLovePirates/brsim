@@ -19,7 +19,7 @@ import {
     ELIXIR_HEAL_PER_TICK, // NEW: For Alchemist
     ELIXIR_HEAL_TICK_INTERVAL_MS // NEW: For Alchemist
 } from '../config.js';
-import { displayMessage } from '../utils/displayUtils.js';
+import { displayMessage } from '../utils/displayUtils.js'; // displayMessage for console, not canvas
 import { checkDistance } from '../utils/mathUtils.js';
 import { handleSpecialMove, updateMoveEffect } from './characterMoves.js';
 import { handleSecondaryAbility, updateAbilityEffect } from './characterAbilities.js';
@@ -95,6 +95,68 @@ export class Character {
         this.dy = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * this.speed * scaleFactor;
         if (Math.abs(this.dx) < 1 * this.speed * scaleFactor) this.dx = (this.dx > 0 ? 1 : -1) * this.speed * scaleFactor;
         if (Math.abs(this.dy) < 1 * this.speed * scaleFactor) this.dy = (this.dy > 0 ? 1 : -1) * this.speed * scaleFactor;
+    }
+
+    /**
+     * Heals the character.
+     * @param {number} amount - The amount of health to restore.
+     */
+    heal(amount) {
+        this.health = Math.min(this.maxHealth, this.health + amount);
+        this.healingDone += amount;
+    }
+
+    /**
+     * Applies damage to the character.
+     * @param {number} rawDamage - The base damage amount.
+     * @param {number} attackerAttack - The attack stat of the attacker.
+     * @param {string} attackerName - The name of the character who dealt the damage.
+     * @param {Array<Character>} allCharacters - All characters in the game.
+     */
+    takeDamage(rawDamage, attackerAttack, attackerName, allCharacters) {
+        if (!this.isAlive) return;
+
+        // Check for invulnerability (e.g., from Wizard's magic shield)
+        if (this.isBlockingShuriken && rawDamage === 25) { // Assuming 25 is shuriken damage
+            displayMessage(`${this.name}'s Magic Shield blocked the Shuriken!`);
+            return;
+        }
+
+        let damageToTake = rawDamage;
+
+        // Apply Feeding Frenzy bonus damage
+        const attacker = allCharacters.find(char => char.name === attackerName);
+        if (attacker && attacker.moveActive && attacker.moveEffect && attacker.moveEffect.type === 'feeding_frenzy') {
+            if (this.health <= this.maxHealth * LOW_HEALTH_THRESHOLD) {
+                damageToTake += damageToTake * FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE;
+                // displayMessage(`${attacker.name}'s Feeding Frenzy dealt bonus damage to ${this.name}!`); // Log bonus damage
+            }
+        }
+
+        // Apply damage reduction from abilities
+        if (this.isInvisible) {
+            damageToTake *= INVISIBILITY_DAMAGE_REDUCTION;
+        }
+
+        // Apply defense
+        damageToTake = Math.max(1, damageToTake - (this.defense * 0.5)); // Reduce damage by half of defense
+
+        this.health -= damageToTake;
+        this.lastHitTime[attackerName] = Date.now(); // Record last hit time by this attacker
+
+        displayMessage(`${this.name} took ${damageToTake.toFixed(0)} damage from ${attackerName}! Health: ${this.health.toFixed(0)}`);
+
+        if (this.health <= 0) {
+            this.health = 0;
+            this.isAlive = false;
+            this.deathTime = performance.now();
+            displayMessage(`${this.name} has been defeated!`);
+
+            const killer = allCharacters.find(char => char.name === attackerName);
+            if (killer) {
+                killer.kills++;
+            }
+        }
     }
 
     /**
@@ -470,181 +532,107 @@ export class Character {
             // Re-added Fin Slice visual alpha calculation here
             else if (this.secondaryAbilityEffect.type === 'fin_slice') {
                 const slashDuration = 15; // Hardcoded visual duration from characterAbilities.js
-                currentAlpha = (this.secondaryAbilityEffect.duration / slashDuration) * 0.7; // Fades out quickly
+                currentAlpha = (this.secondaryAbilityEffect.duration / slashDuration);
+                if (currentAlpha < 0) currentAlpha = 0;
+
+                this.ctx.save();
+                this.ctx.globalAlpha = currentAlpha;
+                this.ctx.strokeStyle = 'red';
+                this.ctx.lineWidth = 5 * CHARACTER_SCALE_FACTOR;
+
+                const armLength = this.width * 1.5;
+                const startX = centerX;
+                const startY = centerY;
+                const endX = startX + armLength * Math.cos(this.secondaryAbilityEffect.angle);
+                const endY = startY + armLength * Math.sin(this.secondaryAbilityEffect.angle);
+
+                this.ctx.beginPath();
+                this.ctx.moveTo(startX, startY);
+                this.ctx.lineTo(endX, endY);
+                this.ctx.stroke();
+                this.ctx.restore();
             }
-            else { // For ongoing ability effects
-                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames) * 0.7;
-            }
-
-
-            switch (this.secondaryAbilityEffect.type) {
-                case 'slippery_floor':
-                    this.ctx.strokeStyle = `rgba(100, 100, 255, ${currentAlpha})`;
-                    this.ctx.lineWidth = 3 * CHARACTER_SCALE_FACTOR;
-                    this.ctx.beginPath();
-                    this.ctx.arc(centerX, centerY, this.secondaryAbilityEffect.radius, 0, Math.PI * 2);
-                    this.ctx.stroke();
-                    this.ctx.lineWidth = 1;
-                    break;
-                case 'iron_skin':
-                    this.ctx.strokeStyle = `rgba(0, 255, 0, ${currentAlpha})`;
-                    this.ctx.lineWidth = 5 * CHARACTER_SCALE_FACTOR;
-                    this.ctx.beginPath();
-                    this.ctx.arc(centerX, centerY, this.width / 2 + 10 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
-                    this.ctx.stroke();
-                    this.ctx.lineWidth = 1;
-                    break;
-                case 'spur_of_moment':
-                case 'adrenaline_shot':
-                    this.ctx.strokeStyle = `rgba(255, 255, 0, ${currentAlpha})`;
-                    this.ctx.lineWidth = 4 * CHARACTER_SCALE_FACTOR;
-                    this.ctx.beginPath();
-                    this.ctx.arc(centerX, centerY, this.width / 2 + 8 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
-                    this.ctx.stroke();
-                    this.ctx.lineWidth = 1;
-                    break;
-                case 'static_field':
-                    this.ctx.fillStyle = `rgba(255, 255, 0, ${currentAlpha * 0.5})`;
-                    this.ctx.beginPath();
-                    this.ctx.arc(centerX, centerY, this.secondaryAbilityEffect.radius, 0, Math.PI * 2);
-                    this.ctx.fill();
-                    break;
-                case 'smoke_bomb':
-                    this.ctx.fillStyle = `rgba(100, 100, 100, ${currentAlpha})`;
-                    this.ctx.beginPath();
-                    this.ctx.arc(centerX, centerY, this.secondaryAbilityEffect.radius, 0, Math.PI * 2);
-                    this.ctx.fill();
-                    break;
-                case 'magic_shield':
-                    this.ctx.strokeStyle = `rgba(0, 0, 255, ${currentAlpha})`;
-                    this.ctx.lineWidth = 6 * CHARACTER_SCALE_FACTOR;
-                    this.ctx.beginPath();
-                    this.ctx.arc(centerX, centerY, this.width / 2 + 12 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
-                    this.ctx.stroke();
-                    break;
-                case 'fortify':
-                    this.ctx.strokeStyle = `rgba(150, 75, 0, ${currentAlpha})`;
-                    this.ctx.lineWidth = 7 * CHARACTER_SCALE_FACTOR;
-                    this.ctx.beginPath();
-                    this.ctx.rect(this.x - 5 * CHARACTER_SCALE_FACTOR, this.y - 5 * CHARACTER_SCALE_FACTOR, this.width + 10 * CHARACTER_SCALE_FACTOR, this.height + 10 * CHARACTER_SCALE_FACTOR);
-                    this.ctx.stroke();
-                    break;
-                 case 'phase':
-                    this.ctx.strokeStyle = `rgba(150, 0, 255, ${currentAlpha})`;
-                    this.ctx.lineWidth = 4 * CHARACTER_SCALE_FACTOR;
-                    this.ctx.beginPath();
-                    this.ctx.arc(centerX, centerY, this.width / 2 + 5 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
-                    this.ctx.stroke();
-                    break;
-                 case 'invisibility':
-                    // Transparency is handled at the character drawing level
-                    break;
-                case 'honeycomb_projectile': // Draw the honeycomb projectile
-                    this.ctx.fillStyle = `rgba(255, 220, 0, ${currentAlpha})`; // Yellow translucent
-                    this.ctx.beginPath();
-                    this.ctx.arc(this.secondaryAbilityEffect.x, this.secondaryAbilityEffect.y, this.secondaryAbilityEffect.radius, 0, Math.PI * 2);
-                    this.ctx.fill();
-                    break;
-                case 'honeycomb_stick': // The visual of the stun itself
-                case 'volatile_concoction_stun': // NEW: Alchemist stun visual is handled by the main stun draw logic
-                    // This is now handled by the 'Draw stuck indicator' block at the top of draw().
-                    // No additional drawing here for this specific effect type.
-                    break;
-                // Re-added Fin Slice visual here with adjusted radius
-                case 'fin_slice':
-                    if (this.secondaryAbilityEffect.type === 'fin_slice' && this.secondaryAbilityEffect.duration > 0) {
-                        this.ctx.save();
-                        this.ctx.globalAlpha = currentAlpha;
-                        this.ctx.strokeStyle = 'red';
-                        this.ctx.lineWidth = 6 * CHARACTER_SCALE_FACTOR;
-                        this.ctx.beginPath();
-                        // Draw a quick slash arc further out from the shark
-                        // Changed this value from this.width * 0.8 to this.width * 1.1
-                        this.ctx.arc(centerX, centerY, this.width * 1.1, this.secondaryAbilityEffect.angle - Math.PI / 4, this.secondaryAbilityEffect.angle + Math.PI / 4);
-                        this.ctx.stroke();
-                        this.ctx.restore();
-                    }
-                    break;
-                // NEW: Elixir of Fortitude effect visual
-                case 'elixir_of_fortitude':
-                    this.ctx.strokeStyle = `rgba(0, 255, 0, ${currentAlpha * 0.8})`; // Bright green pulsing aura
-                    this.ctx.lineWidth = 5 * CHARACTER_SCALE_FACTOR;
-                    this.ctx.beginPath();
-                    this.ctx.arc(centerX, centerY, this.width / 2 + 10 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
-                    this.ctx.stroke();
-                    this.ctx.lineWidth = 1;
-                    break;
-            }
-        }
-        this.ctx.globalAlpha = this.originalAlpha; // Ensure alpha is reset after drawing everything
-    }
-
-    /**
-     * Applies damage to the character.
-     * @param {number} baseAmount - The base amount of damage.
-     * @param {number} attackerAttack - The attack stat of the attacker.
-     * @param {string} attackerName - The name of the attacker.
-     * @param {Array<Character>} allCharacters - All characters in the game (for killer tracking).
-     */
-    takeDamage(baseAmount, attackerAttack, attackerName, allCharacters) {
-        const currentTime = Date.now();
-        if (this.lastHitTime[attackerName] && (currentTime - this.lastHitTime[attackerName] < HIT_COOLDOWN)) {
-            return;
-        }
-
-        if (this.isPhasing) {
-             displayMessage(`${this.name} phased through ${attackerName}'s attack!`);
-             this.lastHitTime[attackerName] = currentTime;
-             return;
-        }
-
-        let effectiveDamage = Math.max(1, baseAmount + attackerAttack * 0.5 - this.defense * 0.5);
-
-        // Apply bonus damage from Feeding Frenzy if attacker is Shark and in frenzy AND target is low health
-        const attackerChar = allCharacters.find(char => char.name === attackerName);
-        if (attackerChar && attackerChar.moveType === 'feeding_frenzy' && attackerChar.moveActive && attackerChar.moveEffect && attackerChar.moveEffect.type === 'feeding_frenzy') {
-            if (this.health <= this.maxHealth * LOW_HEALTH_THRESHOLD) {
-                effectiveDamage += effectiveDamage * FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE;
-                displayMessage(`${attackerChar.name}'s Feeding Frenzy dealt bonus damage to ${this.name}!`);
-            }
-        }
-
-
-        if (this.secondaryAbilityActive && this.secondaryAbilityEffect) {
-            if (this.secondaryAbilityEffect.type === 'iron_skin') {
-                effectiveDamage *= 0.5;
+            // Add other secondary ability drawing logic here based on type
+            else if (this.secondaryAbilityEffect.type === 'slippery_floor') {
+                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
+                this.ctx.save();
+                this.ctx.globalAlpha = currentAlpha * 0.4;
+                this.ctx.fillStyle = 'blue';
+                this.ctx.beginPath();
+                this.ctx.arc(centerX, centerY, this.secondaryAbilityEffect.radius, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.restore();
+            } else if (this.secondaryAbilityEffect.type === 'iron_skin') {
+                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
+                this.ctx.save();
+                this.ctx.globalAlpha = currentAlpha * 0.3;
+                this.ctx.fillStyle = 'gray';
+                this.ctx.beginPath();
+                this.ctx.arc(centerX, centerY, this.width / 2 + 5 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.restore();
+            } else if (this.secondaryAbilityEffect.type === 'spur_of_moment') {
+                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
+                this.ctx.save();
+                this.ctx.globalAlpha = currentAlpha * 0.5;
+                this.ctx.strokeStyle = 'cyan';
+                this.ctx.lineWidth = 3 * CHARACTER_SCALE_FACTOR;
+                this.ctx.beginPath();
+                this.ctx.arc(centerX, centerY, this.width / 2 + 10 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.restore();
+            } else if (this.secondaryAbilityEffect.type === 'static_field') {
+                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
+                this.ctx.save();
+                this.ctx.globalAlpha = currentAlpha * 0.5;
+                this.ctx.strokeStyle = 'lime';
+                this.ctx.lineWidth = 4 * CHARACTER_SCALE_FACTOR;
+                this.ctx.beginPath();
+                this.ctx.arc(centerX, centerY, this.secondaryAbilityEffect.radius, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.restore();
+            } else if (this.secondaryAbilityEffect.type === 'adrenaline_shot') {
+                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
+                this.ctx.save();
+                this.ctx.globalAlpha = currentAlpha * 0.7;
+                this.ctx.fillStyle = 'orange';
+                this.ctx.beginPath();
+                this.ctx.arc(centerX, centerY, this.width / 4, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.restore();
+            } else if (this.secondaryAbilityEffect.type === 'smoke_bomb') {
+                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
+                this.ctx.save();
+                this.ctx.globalAlpha = currentAlpha * 0.4;
+                this.ctx.fillStyle = 'darkgray';
+                this.ctx.beginPath();
+                this.ctx.arc(centerX, centerY, this.secondaryAbilityEffect.radius, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.restore();
             } else if (this.secondaryAbilityEffect.type === 'magic_shield') {
-                effectiveDamage *= 0.6;
+                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
+                this.ctx.save();
+                this.ctx.globalAlpha = currentAlpha * 0.6;
+                this.ctx.strokeStyle = 'lightblue';
+                this.ctx.lineWidth = 5 * CHARACTER_SCALE_FACTOR;
+                this.ctx.beginPath();
+                this.ctx.arc(centerX, centerY, this.width / 2 + 5 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.restore();
             } else if (this.secondaryAbilityEffect.type === 'fortify') {
-                effectiveDamage *= 0.4;
+                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
+                this.ctx.save();
+                this.ctx.globalAlpha = currentAlpha * 0.4;
+                this.ctx.fillStyle = 'saddlebrown';
+                this.ctx.fillRect(this.x, this.y, this.width, this.height);
+                this.ctx.restore();
+            } else if (this.secondaryAbilityEffect.type === 'phase') {
+                // Phasing alpha is handled at the beginning of draw()
             } else if (this.secondaryAbilityEffect.type === 'invisibility') {
-                 effectiveDamage *= INVISIBILITY_DAMAGE_REDUCTION;
+                // Invisibility alpha is handled at the beginning of draw()
+            } else if (this.secondaryAbilityEffect.type === 'elixir_of_fortitude') {
+                // The healing effect is drawn by isHealingOverTime property
             }
         }
-
-        this.health -= effectiveDamage;
-        this.lastHitTime[attackerName] = currentTime;
-
-        if (this.health <= 0) {
-            this.health = 0;
-            this.isAlive = false;
-            this.deathTime = performance.now();
-            displayMessage(`${this.name} has been defeated!`);
-            const killer = allCharacters.find(char => char.name === attackerName);
-            if (killer) {
-                killer.kills++;
-            }
-        } else {
-            displayMessage(`${this.name} took ${effectiveDamage.toFixed(0)} damage! Health: ${this.health.toFixed(0)}`);
-        }
-    }
-
-    /**
-     * Heals the character.
-     * @param {number} amount - The amount of health to restore.
-     */
-    heal(amount) {
-        this.health = Math.min(this.maxHealth, this.health + amount);
-        this.healingDone += amount;
     }
 }
