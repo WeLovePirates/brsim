@@ -79,8 +79,8 @@ export const IMAGE_SOURCES = [
       secondaryAbility: 'smoke_bomb', secondaryAbilityCooldown: 9000 },
     { name: 'Wizard', url: './sprites/wizard.png', move: 'fireball', attack: 18, defense: 5, speed: 0.8,
       secondaryAbility: 'magic_shield', secondaryAbilityCooldown: 10000 },
-    { name: 'Tank', url: './sprites/tank.png', move: 'charge', attack: 9, defense: 15, speed: 0.7,
-      secondaryAbility: 'fortify', secondaryAbilityCooldown: 11000 },
+    { name: 'Tank', url: './sprites/tank.png', move: 'charge', attack: 13, defense: 15, speed: 0.7, // ATTACK BUMPED FROM 9 TO 13
+      secondaryAbility: 'fortify', secondaryAbilityCooldown: 20000 },
     { name: 'Ghost', url: './sprites/ghost.png', move: 'boo', attack: 15, defense: 3, speed: 1.8,
       secondaryAbility: 'invisibility', secondaryAbilityCooldown: 10000 },
     { name: 'Queen Bee', url: './sprites/queen_bee.png', move: 'swarm', attack: 12, defense: 8, speed: 1.3,
