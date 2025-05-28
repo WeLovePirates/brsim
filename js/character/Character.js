@@ -15,7 +15,9 @@ import {
     INVISIBILITY_DODGE_BOOST,
     SECONDARY_ABILITY_DURATION_FRAMES,
     FEEDING_FRENZY_DURATION_FRAMES, // Still need this for characterMoves logic
-    FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE // Still need this for takeDamage logic
+    FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE, // Still need this for takeDamage logic
+    ELIXIR_HEAL_PER_TICK, // NEW: For Alchemist
+    ELIXIR_HEAL_TICK_INTERVAL_MS // NEW: For Alchemist
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -68,11 +70,17 @@ export class Character {
         this.isStunned = false;
         this.originalSpeedWhenStunned = null; // To store speed before stun
 
-        // New properties for Shark abilities (these remain for logic, but visuals removed from draw)
+        // New properties for Shark abilities
         this.isBleeding = false; // For Fin Slice
         this.bleedDamagePerTick = 0; // For Fin Slice
         this.lastBleedTickTime = 0; // For Fin Slice
         this.bleedTarget = null; // For Fin Slice
+
+        // NEW: Alchemist properties
+        this.isHealingOverTime = false;
+        this.healAmountPerTick = 0;
+        this.lastHealTickTime = 0;
+
 
         this.kills = 0;
         this.damageDealt = 0;
@@ -121,6 +129,15 @@ export class Character {
                 return; // Character died, no further updates this frame
             }
         }
+
+        // NEW: Apply healing over time if active (for Alchemist's Elixir of Fortitude)
+        if (this.isHealingOverTime && Date.now() - this.lastHealTickTime > ELIXIR_HEAL_TICK_INTERVAL_MS) {
+            const healAmount = this.healAmountPerTick;
+            this.heal(healAmount);
+            this.lastHealTickTime = Date.now();
+            displayMessage(`${this.name} healed for ${healAmount.toFixed(0)} from Elixir! Health: ${this.health.toFixed(0)}`);
+        }
+
 
         // Call updateAbilityEffect for this character BEFORE checking isStunned for movement,
         // so that the stun duration can expire in this frame.
@@ -270,8 +287,12 @@ export class Character {
 
         // Draw stuck indicator
         // Condition: Character is stunned AND it was stunned by honeycomb_stick effect
-        if (this.isStunned && this.secondaryAbilityActive && this.secondaryAbilityEffect && this.secondaryAbilityEffect.type === 'honeycomb_stick') {
-            this.ctx.fillStyle = 'rgba(255, 165, 0, 0.3)'; // Orange translucent
+        if (this.isStunned && this.secondaryAbilityActive && this.secondaryAbilityEffect) {
+            if (this.secondaryAbilityEffect.type === 'honeycomb_stick') {
+                this.ctx.fillStyle = 'rgba(255, 165, 0, 0.3)'; // Orange translucent for Honeycomb
+            } else if (this.secondaryAbilityEffect.type === 'volatile_concoction_stun') {
+                this.ctx.fillStyle = 'rgba(128, 0, 128, 0.3)'; // Purple translucent for Alchemist stun
+            }
             this.ctx.fillRect(this.x, this.y, this.width, this.height);
         }
 
@@ -283,6 +304,16 @@ export class Character {
             this.ctx.rect(this.x, this.y, this.width, this.height); // Draw a red border
             this.ctx.stroke();
             this.ctx.lineWidth = 1; // Reset line width
+        }
+
+        // NEW: Draw healing over time indicator (for Alchemist's Elixir of Fortitude)
+        if (this.isHealingOverTime) {
+            this.ctx.strokeStyle = 'lime'; // Green border
+            this.ctx.lineWidth = 3 * CHARACTER_SCALE_FACTOR;
+            this.ctx.beginPath();
+            this.ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.width / 2 + 8 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.lineWidth = 1;
         }
 
 
@@ -407,6 +438,23 @@ export class Character {
                     this.ctx.lineWidth = 1;
                 }
             }
+            // NEW: Alchemist Volatile Concoction projectile visual
+            else if (this.moveType === 'volatile_concoction') {
+                if (this.moveEffect.type === 'volatile_projectile') {
+                    this.ctx.fillStyle = this.moveEffect.color; // Color determined by effect type
+                    this.ctx.beginPath();
+                    this.ctx.arc(this.moveEffect.x, this.moveEffect.y, this.moveEffect.radius, 0, Math.PI * 2);
+                    this.ctx.fill();
+                } else if (this.moveEffect.type === 'volatile_explosion') {
+                    this.ctx.save();
+                    this.ctx.globalAlpha = this.moveEffect.alpha;
+                    this.ctx.fillStyle = this.moveEffect.color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(this.moveEffect.x, this.moveEffect.y, this.moveEffect.radius, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.restore();
+                }
+            }
         }
 
         // Draw secondary ability effects
@@ -498,6 +546,7 @@ export class Character {
                     this.ctx.fill();
                     break;
                 case 'honeycomb_stick': // The visual of the stun itself
+                case 'volatile_concoction_stun': // NEW: Alchemist stun visual is handled by the main stun draw logic
                     // This is now handled by the 'Draw stuck indicator' block at the top of draw().
                     // No additional drawing here for this specific effect type.
                     break;
@@ -515,6 +564,15 @@ export class Character {
                         this.ctx.stroke();
                         this.ctx.restore();
                     }
+                    break;
+                // NEW: Elixir of Fortitude effect visual
+                case 'elixir_of_fortitude':
+                    this.ctx.strokeStyle = `rgba(0, 255, 0, ${currentAlpha * 0.8})`; // Bright green pulsing aura
+                    this.ctx.lineWidth = 5 * CHARACTER_SCALE_FACTOR;
+                    this.ctx.beginPath();
+                    this.ctx.arc(centerX, centerY, this.width / 2 + 10 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
+                    this.ctx.stroke();
+                    this.ctx.lineWidth = 1;
                     break;
             }
         }

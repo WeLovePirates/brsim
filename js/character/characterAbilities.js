@@ -8,7 +8,10 @@ import {
     HONEYCOMB_STUN_DURATION_FRAMES,
     HONEYCOMB_PROJECTILE_SPEED,
     FIN_SLICE_BLEED_DURATION_FRAMES, // Import new constant
-    FIN_SLICE_BLEED_DAMAGE_PER_TICK // Import new constant
+    FIN_SLICE_BLEED_DAMAGE_PER_TICK, // Import new constant
+    ELIXIR_DEFENSE_BOOST_PERCENTAGE, // NEW: For Alchemist
+    ELIXIR_HEAL_PER_TICK, // NEW: For Alchemist
+    ELIXIR_HEAL_TICK_INTERVAL_MS // NEW: For Alchemist
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -18,7 +21,7 @@ import { checkDistance } from '../utils/mathUtils.js';
  * @param {Character} character - The character performing the ability.
  * @param {Array<Character>} allCharacters - All characters in the game.
  * @param {number} CHARACTER_SCALE_FACTOR - The current scaling factor for characters.
- * @param {HTMLCanvasElement} canvas - The game canvas (needed for projectile boundaries).
+ * @param {HTMLCanvasElement} canvas - The game canvas.
  */
 export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE_FACTOR, canvas) {
     // The cooldown check is done in Character.js before calling this function.
@@ -96,6 +99,24 @@ export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE
         };
 
         displayMessage(`${character.name} used Fin Slice!`);
+
+    } else if (character.secondaryAbilityType === 'elixir_of_fortitude') { // NEW: Alchemist's Secondary Ability
+        character.lastSecondaryAbilityTime = Date.now();
+        character.secondaryAbilityActive = true;
+        character.secondaryAbilityEffect = {
+            type: 'elixir_of_fortitude',
+            duration: SECONDARY_ABILITY_DURATION_FRAMES // Standard duration for secondary abilities
+        };
+
+        // Apply defense boost
+        character.defense *= (1 + ELIXIR_DEFENSE_BOOST_PERCENTAGE);
+
+        // Activate healing over time
+        character.isHealingOverTime = true;
+        character.healAmountPerTick = ELIXIR_HEAL_PER_TICK;
+        character.lastHealTickTime = Date.now(); // Initialize first tick time
+
+        displayMessage(`${character.name} drank Elixir of Fortitude!`);
 
     } else { // Handle other secondary abilities with their original random chance
         // If it's not honeycomb or fin_slice, or if you want other abilities to still have a random chance:
@@ -219,10 +240,10 @@ export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FA
                     const dist = checkDistance(character, target);
                     const visualRadius = character.width * 1.1; // Matches the drawing radius
 
-                    if (dist < visualRadius + target.width / 2) { // Add target's half-width for better collision
+                    if (dist < target.width / 2 + visualRadius) { // Add target's half-width for better collision
                         const damage = 20 + character.attack * 0.8; // Base damage plus attack scaling
                         target.takeDamage(damage, character.attack, character.name, allCharacters);
-                        character.damageDealt += damage;
+                        character.damageDealt += damage; // Log initial hit damage
 
                         // Apply bleed effect
                         target.isBleeding = true;
@@ -270,6 +291,7 @@ export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FA
                 character.dodgeChanceBoost = 0;
                 break;
             case 'honeycomb_stick': // Reset for the 'stuck' effect on a character
+            case 'volatile_concoction_stun': // NEW: Alchemist stun cleanup
                 character.isStunned = false;
                 // Restore speed only if it was indeed altered by this stun
                 if (character.originalSpeedWhenStunned !== null) {
@@ -286,6 +308,12 @@ export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FA
                 // No character property changes here, just the visual goes away
                 // The bleed effect is handled by a separate setTimeout when applied.
                 break;
+            case 'elixir_of_fortitude': // NEW: Alchemist's Elixir of Fortitude cleanup
+                character.defense = character.originalDefense; // Reset defense
+                character.isHealingOverTime = false; // Stop healing
+                character.healAmountPerTick = 0; // Reset heal amount
+                displayMessage(`${character.name}'s Elixir of Fortitude wore off.`);
+                break;
         }
         // Now it's safe to nullify the effect object
         character.secondaryAbilityEffect = null;
@@ -293,16 +321,16 @@ export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FA
 
         // Only reset speed and defense if they were modified by THIS ability
         // And ensure original properties exist before resetting
-        if (abilityType !== 'honeycomb_stick' && character.originalSpeed !== undefined) {
+        if (abilityType !== 'honeycomb_stick' && abilityType !== 'volatile_concoction_stun' && character.originalSpeed !== undefined) {
              character.speed = character.originalSpeed;
         }
-        if (abilityType !== 'honeycomb_stick' && character.originalDefense !== undefined) {
+        if (abilityType !== 'honeycomb_stick' && abilityType !== 'volatile_concoction_stun' && character.originalDefense !== undefined) {
             character.defense = character.originalDefense;
         }
 
         // Update speed vector if speed changed by abilities other than honeycomb
         // And ensure original properties exist before recalculating
-        if (abilityType !== 'honeycomb_stick' && character.speed !== character.originalSpeed && character.originalSpeed !== undefined) {
+        if (abilityType !== 'honeycomb_stick' && abilityType !== 'volatile_concoction_stun' && character.speed !== character.originalSpeed && character.originalSpeed !== undefined) {
             const newSpeedMagnitude = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
             const currentAngle = Math.atan2(character.dy, character.dx);
             character.dx = Math.cos(currentAngle) * newSpeedMagnitude;
