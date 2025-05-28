@@ -13,12 +13,14 @@ import {
     ALL_LOW_HEALTH_RUSH_CHANCE,
     INVISIBILITY_DAMAGE_REDUCTION,
     INVISIBILITY_DODGE_BOOST,
-    SECONDARY_ABILITY_DURATION_FRAMES
+    SECONDARY_ABILITY_DURATION_FRAMES,
+    FEEDING_FRENZY_DURATION_FRAMES, // Still need this for characterMoves logic
+    FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE // Still need this for takeDamage logic
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
 import { handleSpecialMove, updateMoveEffect } from './characterMoves.js';
-import { handleSecondaryAbility, updateAbilityEffect } from './characterAbilities.js'; // Ensure updateAbilityEffect is imported
+import { handleSecondaryAbility, updateAbilityEffect } from './characterAbilities.js';
 
 export class Character {
     constructor(name, image, moveType, attack, defense, speed, scaleFactor, initialHealthOverride = INITIAL_HEALTH, secondaryAbilityType, secondaryAbilityCooldown, canvas) {
@@ -66,6 +68,12 @@ export class Character {
         this.isStunned = false;
         this.originalSpeedWhenStunned = null; // To store speed before stun
 
+        // New properties for Shark abilities (these remain for logic, but visuals removed from draw)
+        this.isBleeding = false; // For Fin Slice
+        this.bleedDamagePerTick = 0; // For Fin Slice
+        this.lastBleedTickTime = 0; // For Fin Slice
+        this.bleedTarget = null; // For Fin Slice
+
         this.kills = 0;
         this.damageDealt = 0;
         this.healingDone = 0;
@@ -88,6 +96,31 @@ export class Character {
      */
     update(characters, CHARACTER_SCALE_FACTOR) {
         if (!this.isAlive) return;
+
+        // Apply bleed damage if bleeding
+        if (this.isBleeding && Date.now() - this.lastBleedTickTime > 1000) { // Damage every 1 second
+            this.health -= this.bleedDamagePerTick; // Apply bleed damage
+            this.lastBleedTickTime = Date.now(); // Update last tick time
+
+            // Find the character who applied the bleed and add to their damageDealt stat
+            const bleederChar = characters.find(char => char.name === this.bleedTarget);
+            if (bleederChar) {
+                bleederChar.damageDealt += this.bleedDamagePerTick; // Log bleed damage
+            }
+
+            displayMessage(`${this.name} is bleeding! Health: ${this.health.toFixed(0)}`); // Display bleed message
+            if (this.health <= 0) { // Check for death from bleed
+                this.health = 0;
+                this.isAlive = false;
+                this.deathTime = performance.now();
+                displayMessage(`${this.name} bled out!`);
+                const killer = characters.find(char => char.name === this.bleedTarget); // Attribute kill to the bleeder
+                if (killer) {
+                    killer.kills++;
+                }
+                return; // Character died, no further updates this frame
+            }
+        }
 
         // Call updateAbilityEffect for this character BEFORE checking isStunned for movement,
         // so that the stun duration can expire in this frame.
@@ -242,6 +275,17 @@ export class Character {
             this.ctx.fillRect(this.x, this.y, this.width, this.height);
         }
 
+        // Draw bleed indicator (Re-added for Fin Slice)
+        if (this.isBleeding) {
+            this.ctx.strokeStyle = 'red';
+            this.ctx.lineWidth = 2 * CHARACTER_SCALE_FACTOR;
+            this.ctx.beginPath();
+            this.ctx.rect(this.x, this.y, this.width, this.height); // Draw a red border
+            this.ctx.stroke();
+            this.ctx.lineWidth = 1; // Reset line width
+        }
+
+
         // Reset alpha for drawing UI elements like health bar and name
         this.ctx.globalAlpha = this.originalAlpha;
 
@@ -351,15 +395,39 @@ export class Character {
                     });
                 }
             }
+            // Re-added Visual for Feeding Frenzy here
+            else if (this.moveType === 'feeding_frenzy') {
+                if (this.moveEffect && this.moveEffect.type === 'feeding_frenzy' && this.moveEffect.duration > 0) {
+                    const frenzyAlpha = this.moveEffect.duration / FEEDING_FRENZY_DURATION_FRAMES;
+                    this.ctx.strokeStyle = `rgba(255, 0, 0, ${frenzyAlpha * 0.8})`;
+                    this.ctx.lineWidth = 5 * CHARACTER_SCALE_FACTOR;
+                    this.ctx.beginPath();
+                    this.ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.width / 2 + 5 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
+                    this.ctx.stroke();
+                    this.ctx.lineWidth = 1;
+                }
+            }
         }
 
         // Draw secondary ability effects
         if (this.secondaryAbilityActive && this.secondaryAbilityEffect) {
             const centerX = this.x + this.width / 2;
             const centerY = this.y + this.height / 2;
-            const durationRatio = SECONDARY_ABILITY_DURATION_FRAMES > 0 ?
-                                  this.secondaryAbilityEffect.duration / SECONDARY_ABILITY_DURATION_FRAMES : 0;
-            const currentAlpha = durationRatio * 0.7;
+            // Use the remaining duration of the effect to calculate alpha for fade out
+            const totalAbilityDurationFrames = SECONDARY_ABILITY_DURATION_FRAMES; // Assuming this is typical
+            let currentAlpha = 0;
+            if (this.secondaryAbilityEffect.type === 'honeycomb_projectile') {
+                currentAlpha = 0.7; // Projectile is consistently opaque
+            }
+            // Re-added Fin Slice visual alpha calculation here
+            else if (this.secondaryAbilityEffect.type === 'fin_slice') {
+                const slashDuration = 15; // Hardcoded visual duration from characterAbilities.js
+                currentAlpha = (this.secondaryAbilityEffect.duration / slashDuration) * 0.7; // Fades out quickly
+            }
+            else { // For ongoing ability effects
+                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames) * 0.7;
+            }
+
 
             switch (this.secondaryAbilityEffect.type) {
                 case 'slippery_floor':
@@ -424,7 +492,7 @@ export class Character {
                     // Transparency is handled at the character drawing level
                     break;
                 case 'honeycomb_projectile': // Draw the honeycomb projectile
-                    this.ctx.fillStyle = 'rgba(255, 220, 0, 0.7)'; // Yellow translucent
+                    this.ctx.fillStyle = `rgba(255, 220, 0, ${currentAlpha})`; // Yellow translucent
                     this.ctx.beginPath();
                     this.ctx.arc(this.secondaryAbilityEffect.x, this.secondaryAbilityEffect.y, this.secondaryAbilityEffect.radius, 0, Math.PI * 2);
                     this.ctx.fill();
@@ -432,6 +500,21 @@ export class Character {
                 case 'honeycomb_stick': // The visual of the stun itself
                     // This is now handled by the 'Draw stuck indicator' block at the top of draw().
                     // No additional drawing here for this specific effect type.
+                    break;
+                // Re-added Fin Slice visual here with adjusted radius
+                case 'fin_slice':
+                    if (this.secondaryAbilityEffect.type === 'fin_slice' && this.secondaryAbilityEffect.duration > 0) {
+                        this.ctx.save();
+                        this.ctx.globalAlpha = currentAlpha;
+                        this.ctx.strokeStyle = 'red';
+                        this.ctx.lineWidth = 6 * CHARACTER_SCALE_FACTOR;
+                        this.ctx.beginPath();
+                        // Draw a quick slash arc further out from the shark
+                        // Changed this value from this.width * 0.8 to this.width * 1.1
+                        this.ctx.arc(centerX, centerY, this.width * 1.1, this.secondaryAbilityEffect.angle - Math.PI / 4, this.secondaryAbilityEffect.angle + Math.PI / 4);
+                        this.ctx.stroke();
+                        this.ctx.restore();
+                    }
                     break;
             }
         }
@@ -458,6 +541,16 @@ export class Character {
         }
 
         let effectiveDamage = Math.max(1, baseAmount + attackerAttack * 0.5 - this.defense * 0.5);
+
+        // Apply bonus damage from Feeding Frenzy if attacker is Shark and in frenzy AND target is low health
+        const attackerChar = allCharacters.find(char => char.name === attackerName);
+        if (attackerChar && attackerChar.moveType === 'feeding_frenzy' && attackerChar.moveActive && attackerChar.moveEffect && attackerChar.moveEffect.type === 'feeding_frenzy') {
+            if (this.health <= this.maxHealth * LOW_HEALTH_THRESHOLD) {
+                effectiveDamage += effectiveDamage * FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE;
+                displayMessage(`${attackerChar.name}'s Feeding Frenzy dealt bonus damage to ${this.name}!`);
+            }
+        }
+
 
         if (this.secondaryAbilityActive && this.secondaryAbilityEffect) {
             if (this.secondaryAbilityEffect.type === 'iron_skin') {

@@ -38,6 +38,14 @@ export const SWARM_BEE_DAMAGE_PER_TICK = 5; // Damage per tick for each mini bee
 export const HONEYCOMB_STUN_DURATION_FRAMES = 120; // Duration for Honeycomb stun
 export const HONEYCOMB_PROJECTILE_SPEED = 5; // Adjust as needed for projectile speed
 
+// Shark Class 
+export const FEEDING_FRENZY_DURATION_FRAMES = 180; // Duration of Feeding Frenzy in frames (e.g., 3 seconds at 60 FPS)
+export const FEEDING_FRENZY_ATTACK_SPEED_BOOST = 1.5; // Multiplier for attack speed (represented by character speed)
+export const FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE = 0.25; // 25% bonus damage to targets below LOW_HEALTH_THRESHOLD
+
+export const FIN_SLICE_BLEED_DURATION_FRAMES = 300; // Duration of bleed effect in frames (e.g., 5 seconds at 60 FPS)
+export const FIN_SLICE_BLEED_DAMAGE_PER_TICK = 3; // Base damage per tick for the bleed effect (applied every 1 second)
+
 export const MAP_IMAGE_SOURCE = './sprites/map.png'; // New: Path to your map image
 
 export const IMAGE_SOURCES = [
@@ -61,4 +69,6 @@ export const IMAGE_SOURCES = [
       secondaryAbility: 'invisibility', secondaryAbilityCooldown: 10000 },
     { name: 'Queen Bee', url: './sprites/queen_bee.png', move: 'swarm', attack: 12, defense: 8, speed: 1.3,
       secondaryAbility: 'honeycomb', secondaryAbilityCooldown: 9000 },
+      { name: 'Shark', url: './sprites/shark.png', move: 'feeding_frenzy', attack: 15, defense: 9, speed: 1.1,
+      secondaryAbility: 'fin_slice', secondaryAbilityCooldown: 9000 },
 ];
