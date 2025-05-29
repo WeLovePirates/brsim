@@ -14,12 +14,12 @@ import {
     INVISIBILITY_DAMAGE_REDUCTION,
     INVISIBILITY_DODGE_BOOST,
     SECONDARY_ABILITY_DURATION_FRAMES,
-    FEEDING_FRENZY_DURATION_FRAMES, // Still need this for characterMoves logic
-    FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE, // Still need this for takeDamage logic
-    ELIXIR_HEAL_PER_TICK, // NEW: For Alchemist
-    ELIXIR_HEAL_TICK_INTERVAL_MS // NEW: For Alchemist
+    FEEDING_FRENZY_DURATION_FRAMES,
+    FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE,
+    ELIXIR_HEAL_PER_TICK,
+    ELIXIR_HEAL_TICK_INTERVAL_MS
 } from '../config.js';
-import { displayMessage } from '../utils/displayUtils.js'; // displayMessage for console, not canvas
+import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
 import { handleSpecialMove, updateMoveEffect } from './characterMoves.js';
 import { handleSecondaryAbility, updateAbilityEffect } from './characterAbilities.js';
@@ -85,8 +85,8 @@ export class Character {
         this.kills = 0;
         this.damageDealt = 0;
         this.healingDone = 0;
-        this.spawnTime = 0; // Re-added: Initialize to 0
-        this.deathTime = 0; // Re-added: Initialize to 0
+        this.spawnTime = 0;
+        this.deathTime = 0;
 
         this.x = Math.random() * (this.canvas.width - this.width);
         this.y = Math.random() * (this.canvas.height - this.height);
@@ -149,7 +149,7 @@ export class Character {
         if (this.health <= 0) {
             this.health = 0;
             this.isAlive = false;
-            this.deathTime = performance.now(); // Re-added: Set deathTime when character is defeated
+            this.deathTime = performance.now();
             displayMessage(`${this.name} has been defeated!`);
 
             const killer = allCharacters.find(char => char.name === attackerName);
@@ -182,7 +182,7 @@ export class Character {
             if (this.health <= 0) { // Check for death from bleed
                 this.health = 0;
                 this.isAlive = false;
-                this.deathTime = performance.now(); // Re-added: Set deathTime if character bleeds out
+                this.deathTime = performance.now();
                 displayMessage(`${this.name} bled out!`);
                 const killer = characters.find(char => char.name === this.bleedTarget); // Attribute kill to the bleeder
                 if (killer) {
@@ -349,6 +349,9 @@ export class Character {
 
         // Draw stuck indicator
         // Condition: Character is stunned AND it was stunned by honeycomb_stick effect
+        // Note: The original 'draw stuck indicator' was drawing a fillRect.
+        // The more recent version you provided has a slightly different visual.
+        // I will use the code you provided in the last Character.js for consistency.
         if (this.isStunned && this.secondaryAbilityActive && this.secondaryAbilityEffect) {
             if (this.secondaryAbilityEffect.type === 'honeycomb_stick') {
                 this.ctx.fillStyle = 'rgba(255, 165, 0, 0.3)'; // Orange translucent for Honeycomb
@@ -512,7 +515,8 @@ export class Character {
                     this.ctx.globalAlpha = this.moveEffect.alpha;
                     this.ctx.fillStyle = this.moveEffect.color;
                     this.ctx.beginPath();
-                    this.ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.moveEffect.radius, 0, Math.PI * 2);
+                    // THIS IS THE LINE THAT NEEDS TO BE CHANGED (FROM this.x + this.width / 2 TO this.moveEffect.x)
+                    this.ctx.arc(this.moveEffect.x, this.moveEffect.y, this.moveEffect.radius, 0, Math.PI * 2);
                     this.ctx.fill();
                     this.ctx.restore();
                 }
