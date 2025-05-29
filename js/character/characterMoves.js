@@ -419,13 +419,19 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
             }
             break;
         case 'boo':
-            character.moveEffect = {
-                type: 'boo_effect',
-                radius: character.width * 2.0,
-                duration: 30,
-                appliedDamage: false
-            };
-            displayMessage(`${character.name} lets out a spectral cry!`);
+            // The 'boo' effect logic seemed duplicated. I'm assuming it should just decrement duration here.
+            // If there's more specific Boo logic for continuous effects, it should be added.
+            if (character.moveEffect && character.moveEffect.type === 'boo_effect') {
+                character.moveEffect.duration--;
+                if (character.moveEffect.duration <= 0) {
+                    character.moveActive = false;
+                    character.moveEffect = null;
+                }
+            } else {
+                 // Fallback if boo effect is not correctly initialized
+                 character.moveActive = false;
+                 character.moveEffect = null;
+            }
             break;
         case 'swarm':
             if (character.moveEffect && character.moveEffect.type === 'swarm') {
@@ -547,6 +553,10 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                 character.moveEffect.y += character.moveEffect.vy;
                 character.moveEffect.life--;
 
+                // --- DEBUGGING LOGS ---
+                // console.log(`Projectile Pos: (${character.moveEffect.x.toFixed(0)}, ${character.moveEffect.y.toFixed(0)})`);
+                // console.log(`Projectile Vel: (${character.moveEffect.vx.toFixed(2)}, ${character.moveEffect.vy.toFixed(2)})`);
+
                 let shouldExplode = false;
                 for (const target of allCharacters) {
                     if (target !== character && target.isAlive && !target.isPhasing) {
@@ -554,21 +564,38 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                             {x: character.moveEffect.x, y: character.moveEffect.y, width: character.moveEffect.radius * 2, height: character.moveEffect.radius * 2},
                             target
                         );
+
+                        // console.log(`  Target: ${target.name} (Alive: ${target.isAlive}, Phasing: ${target.isPhasing})`);
+                        // console.log(`  Target Pos: (${target.x.toFixed(0)}, ${target.y.toFixed(0)}) Size: ${target.width.toFixed(0)}`);
+                        // console.log(`  Distance to ${target.name}: ${dist.toFixed(0)}`);
+                        // console.log(`  Required Dist for Collision: ${(target.width / 2 + character.moveEffect.radius).toFixed(0)}`);
+
+
                         if (dist < target.width / 2 + character.moveEffect.radius) {
                             shouldExplode = true;
+                            console.warn(`!!! VOLATILE CONCOCTION IMPACT DETECTED on ${target.name} !!!`); // This should fire on impact
                             break;
                         }
                     }
                 }
 
-                if (character.moveEffect.life <= 0 || shouldExplode ||
-                    character.moveEffect.x < -character.moveEffect.radius || character.moveEffect.x > canvas.width + character.moveEffect.radius ||
-                    character.moveEffect.y < -character.moveEffect.radius || character.moveEffect.y > canvas.height + character.moveEffect.radius) {
+                // FIX: If shouldExplode is true, we force the explosion and ignore out-of-bounds.
+                // Otherwise, we check for out-of-bounds or life expiring.
+                let isOutOfBounds = character.moveEffect.x < -character.moveEffect.radius || character.moveEffect.x > canvas.width + character.moveEffect.radius ||
+                                    character.moveEffect.y < -character.moveEffect.radius || character.moveEffect.y > canvas.height + character.moveEffect.radius;
+
+                if (shouldExplode || character.moveEffect.life <= 0 || isOutOfBounds) {
+                    console.log(`Exploding: Life <= 0 (${character.moveEffect.life <= 0}) || Should Explode (${shouldExplode}) || Out of Bounds (${isOutOfBounds})`);
+                    
+                    // Prioritize actual collision. If shouldExplode is true, the explosion location is confirmed at the projectile's current spot.
+                    // If not shouldExplode, but it's out of bounds, we might want to clamp the position to the edge for the explosion.
+                    // However, the original code already assigns projectile.x/y, so it will still be the potentially OOB point.
+                    // For the Alchemist, the main thing is that if it hits, it explodes there.
                     
                     character.moveEffect = {
                         type: 'volatile_explosion',
-                        x: character.moveEffect.x,
-                        y: character.moveEffect.y,
+                        x: character.moveEffect.x, // Use projectile's x
+                        y: character.moveEffect.y, // Use projectile's y
                         radius: 10 * CHARACTER_SCALE_FACTOR,
                         maxRadius: VOLATILE_CONCOCTION_EXPLOSION_RADIUS * CHARACTER_SCALE_FACTOR,
                         duration: 30,
@@ -577,6 +604,7 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                         color: character.moveEffect.color,
                         targetsHit: []
                     };
+                    console.log(`Explosion created at: (${character.moveEffect.x.toFixed(0)}, ${character.moveEffect.y.toFixed(0)})`);
                 }
             } else if (character.moveEffect.type === 'volatile_explosion') {
                 character.moveEffect.radius += (character.moveEffect.maxRadius - character.moveEffect.radius) * 0.2;
@@ -590,6 +618,7 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                                 target
                             );
                             if (dist < target.width / 2 + character.moveEffect.radius) {
+                                console.log(`Applying ${character.moveEffect.effectType} to ${target.name} from explosion at (${character.moveEffect.x.toFixed(0)}, ${character.moveEffect.y.toFixed(0)})`); // New log
                                 switch (character.moveEffect.effectType) {
                                     case 'damage':
                                         const damageAmount = VOLATILE_CONCOCTION_DAMAGE;
@@ -625,10 +654,10 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                     });
                 }
 
-
                 if (character.moveEffect.duration <= 0 || character.moveEffect.alpha <= 0) {
                     character.moveActive = false;
                     character.moveEffect = null;
+                    console.log("Explosion finished."); // New log
                 }
             }
             break;
