@@ -3,8 +3,7 @@
 import { BASE_COLLISION_DAMAGE } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkCollision } from '../utils/collisionUtils.js';
-import { checkDistance } from '../utils/mathUtils.js'; // Corrected import path for checkDistance
-// import { CHARACTER_SCALE_FACTOR } from '../ui/uiUpdates.js'; // CHARACTER_SCALE_FACTOR is not directly used here, so removed.
+import { checkDistance } from '../utils/mathUtils.js';
 
 /**
  * Calculates the win probabilities for all alive characters.
@@ -102,7 +101,7 @@ export function applyStaticFieldDamage(characters) {
                     if (target.health <= 0) {
                         target.health = 0;
                         target.isAlive = false;
-                        target.deathTime = performance.now();
+                        target.deathTime = performance.now(); // Keep deathTime for general summary time calculations
                         displayMessage(`${target.name} was defeated by ${char.name}'s Static Field!`);
                         char.kills++;
                     }

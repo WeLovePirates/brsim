@@ -39,7 +39,7 @@ export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE
             x: character.x + character.width / 2,
             y: character.y + character.height / 2,
             radius: 10 * CHARACTER_SCALE_FACTOR, // Projectile size
-            speed: HONEYCOMB_PROJECTILE_SPEED * CHARACTER_SCALE_FACTOR,
+            speed: HONEYCOMB_PROJECTILE_SPEED * CHARACTER_SCALE_FACTOR, // Projectile speed
             duration: 300, // Projectile lifespan in frames (adjust as needed)
             dx: 0,
             dy: 0,
@@ -90,7 +90,7 @@ export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE
         });
 
         // Create the secondaryAbilityEffect for the visual cue and collision detection
-        const angleToOpponent = nearestOpponent ? Math.atan2(nearestOpponent.y - character.y, nearestOpponent.x - character.x) : Math.random() * Math.PI * 2; // Aim at nearest or random
+        const angleToOpponent = nearestOpponent ? Math.atan2(nearestOpponent.y - character.y, nearestOpponent.x - character.x) : Math.random() * Math.PI * 2;
         character.secondaryAbilityEffect = {
             type: 'fin_slice',
             duration: 15, // Short duration for the visual slash (e.g., 0.25 seconds)
@@ -223,34 +223,27 @@ export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE
 export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FACTOR, canvas) {
     if (!character.secondaryAbilityActive || !character.secondaryAbilityEffect) return;
 
-    // Handle honeycomb projectile updates separately if the character is the Queen Bee firing it
     if (character.secondaryAbilityEffect.type === 'honeycomb_projectile') {
         updateHoneyCombProjectile(character, allCharacters, CHARACTER_SCALE_FACTOR, canvas);
-        return; // Projectile update handled separately
+        return;
     }
 
-    // Special handling for Fin Slice collision and bleed application
     if (character.secondaryAbilityEffect.type === 'fin_slice') {
-        // Only apply damage/bleed during the active visual frames
         if (character.secondaryAbilityEffect.duration > 0) {
             allCharacters.forEach(target => {
-                // Check if target is valid and hasn't been hit by this slice instance yet
                 if (target !== character && target.isAlive && !target.isPhasing && !character.secondaryAbilityEffect.targetsHit.includes(target.name)) {
-                    // Collision check: if target is within the visual cue's radius
                     const dist = checkDistance(character, target);
-                    const visualRadius = character.width * 1.1; // Matches the drawing radius
+                    const visualRadius = character.width * 1.1;
 
-                    if (dist < target.width / 2 + visualRadius) { // Add target's half-width for better collision
-                        const damage = 20 + character.attack * 0.8; // Base damage plus attack scaling
+                    if (dist < target.width / 2 + visualRadius) {
+                        const damage = 20 + character.attack * 0.8;
                         target.takeDamage(damage, character.attack, character.name, allCharacters);
-                        character.damageDealt += damage; // Log initial hit damage
+                        character.damageDealt += damage;
 
-                        // Apply bleed effect
                         target.isBleeding = true;
                         target.bleedDamagePerTick = FIN_SLICE_BLEED_DAMAGE_PER_TICK + character.attack * 0.1;
                         target.lastBleedTickTime = Date.now();
                         target.bleedTarget = character.name;
-                        // Set a timeout to remove bleeding after duration
                         setTimeout(() => {
                             if (target.isBleeding && target.bleedTarget === character.name) {
                                 target.isBleeding = false;
@@ -261,7 +254,7 @@ export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FA
                         }, FIN_SLICE_BLEED_DURATION_FRAMES * (1000/60));
 
                         displayMessage(`${character.name}'s Fin Slice hit ${target.name}!`);
-                        character.secondaryAbilityEffect.targetsHit.push(target.name); // Mark target as hit
+                        character.secondaryAbilityEffect.targetsHit.push(target.name);
                     }
                 }
             });
@@ -269,13 +262,11 @@ export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FA
     }
 
 
-    // For all other secondary ability effects (including honeycomb_stick on the target and fin_slice visual)
     character.secondaryAbilityEffect.duration--;
     if (character.secondaryAbilityEffect.duration <= 0) {
         const abilityType = character.secondaryAbilityEffect.type;
 
         character.secondaryAbilityActive = false;
-        // Handle specific effect cleanup BEFORE setting secondaryAbilityEffect to null
         switch (abilityType) {
             case 'magic_shield':
                 character.isBlockingShuriken = false;
@@ -285,42 +276,36 @@ export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FA
                 break;
             case 'invisibility':
                 character.isInvisible = false;
-                if (character.ctx) character.ctx.globalAlpha = character.originalAlpha; // Restore original alpha
+                if (character.ctx) character.ctx.globalAlpha = character.originalAlpha;
                 break;
             case 'smoke_bomb':
                 character.dodgeChanceBoost = 0;
                 break;
-            case 'honeycomb_stick': // Reset for the 'stuck' effect on a character
-            case 'volatile_concoction_stun': // NEW: Alchemist stun cleanup
+            case 'honeycomb_stick':
+            case 'volatile_concoction_stun':
                 character.isStunned = false;
-                // Restore speed only if it was indeed altered by this stun
                 if (character.originalSpeedWhenStunned !== null) {
                     character.speed = character.originalSpeedWhenStunned;
                     const newSpeedMagnitude = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
                     const currentAngle = Math.atan2(character.dy, character.dx);
                     character.dx = Math.cos(currentAngle) * newSpeedMagnitude;
                     character.dy = Math.sin(currentAngle) * newSpeedMagnitude;
-                    character.originalSpeedWhenStunned = null; // Clear the stored speed
+                    character.originalSpeedWhenStunned = null;
                 }
                 displayMessage(`${character.name} is no longer stuck!`);
                 break;
             case 'fin_slice':
-                // No character property changes here, just the visual goes away
-                // The bleed effect is handled by a separate setTimeout when applied.
                 break;
-            case 'elixir_of_fortitude': // NEW: Alchemist's Elixir of Fortitude cleanup
-                character.defense = character.originalDefense; // Reset defense
-                character.isHealingOverTime = false; // Stop healing
-                character.healAmountPerTick = 0; // Reset heal amount
+            case 'elixir_of_fortitude':
+                character.defense = character.originalDefense;
+                character.isHealingOverTime = false;
+                character.healAmountPerTick = 0;
                 displayMessage(`${character.name}'s Elixir of Fortitude wore off.`);
                 break;
         }
-        // Now it's safe to nullify the effect object
         character.secondaryAbilityEffect = null;
 
 
-        // Only reset speed and defense if they were modified by THIS ability
-        // And ensure original properties exist before resetting
         if (abilityType !== 'honeycomb_stick' && abilityType !== 'volatile_concoction_stun' && character.originalSpeed !== undefined) {
              character.speed = character.originalSpeed;
         }
@@ -328,8 +313,6 @@ export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FA
             character.defense = character.originalDefense;
         }
 
-        // Update speed vector if speed changed by abilities other than honeycomb
-        // And ensure original properties exist before recalculating
         if (abilityType !== 'honeycomb_stick' && abilityType !== 'volatile_concoction_stun' && character.speed !== character.originalSpeed && character.originalSpeed !== undefined) {
             const newSpeedMagnitude = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
             const currentAngle = Math.atan2(character.dy, character.dx);
@@ -349,7 +332,6 @@ export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FA
  * @param {HTMLCanvasElement} canvas - The game canvas.
  */
 function updateHoneyCombProjectile(queenBee, allCharacters, CHARACTER_SCALE_FACTOR, canvas) {
-    // Check if the projectile is still active and of the correct type on the Queen Bee
     if (!queenBee.secondaryAbilityActive || !queenBee.secondaryAbilityEffect || queenBee.secondaryAbilityEffect.type !== 'honeycomb_projectile') {
         return;
     }
@@ -359,42 +341,36 @@ function updateHoneyCombProjectile(queenBee, allCharacters, CHARACTER_SCALE_FACT
     projectile.y += projectile.dy;
     projectile.duration--;
 
-    // Boundary collision or duration end for the projectile itself
     if (projectile.x < -projectile.radius || projectile.x + projectile.radius > canvas.width + projectile.radius ||
         projectile.y < -projectile.radius || projectile.y + projectile.radius > canvas.height + projectile.radius ||
         projectile.duration <= 0) {
         queenBee.secondaryAbilityActive = false;
-        queenBee.secondaryAbilityEffect = null; // Remove projectile effect from Queen Bee
+        queenBee.secondaryAbilityEffect = null;
         return;
     }
 
-    // Character collision for the projectile
     for (const target of allCharacters) {
-        if (target !== queenBee && target.isAlive && !target.isPhasing && !target.isStunned) { // Don't re-stun an already stunned target
-            // Check for simple circular collision with target's bounding box center
+        if (target !== queenBee && target.isAlive && !target.isPhasing && !target.isStunned) {
             const dist = checkDistance({x: projectile.x, y: projectile.y, width: projectile.radius * 2, height: projectile.radius * 2}, target);
             if (dist < target.width / 2 + projectile.radius) {
-                // Projectile hit a target! Apply stun directly to the target.
                 target.isStunned = true;
-                target.originalSpeedWhenStunned = target.speed; // Store original speed before stun
-                target.speed = 0; // Stop movement
+                target.originalSpeedWhenStunned = target.speed;
+                target.speed = 0;
                 target.dx = 0;
                 target.dy = 0;
 
-                // Apply the 'honeycomb_stick' effect to the *target character*
                 target.secondaryAbilityActive = true;
                 target.secondaryAbilityEffect = {
                     type: 'honeycomb_stick',
-                    duration: HONEYCOMB_STUN_DURATION_FRAMES // Use the defined stun duration
+                    duration: HONEYCOMB_STUN_DURATION_FRAMES
                 };
-                target.lastSecondaryAbilityTime = Date.now(); // Record when they got stuck
+                target.lastSecondaryAbilityTime = Date.now();
 
-                // Remove the projectile effect from the Queen Bee
                 queenBee.secondaryAbilityActive = false;
                 queenBee.secondaryAbilityEffect = null;
 
                 displayMessage(`${target.name} got stuck by Honeycomb!`);
-                return; // Stun only one target per projectile and then remove projectile
+                return;
             }
         }
     }

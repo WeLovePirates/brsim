@@ -2,7 +2,8 @@
 
 import { REFERENCE_GAME_WIDTH } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
-import { playAgainButton } from '../game/gameLoop.js'; // Import the shared button object
+// Import the shared button object and the resetGame/showMainMenu functions from gameLoop.js
+import { playAgainButton, resetGame, showMainMenu } from '../game/gameLoop.js'; 
 
 export let CHARACTER_SCALE_FACTOR = 1;
 
@@ -71,8 +72,23 @@ function handleSummaryMouseOut() { // Stop dragging if mouse leaves canvas
     isDraggingSummary = false;
 }
 
+// NEW: Event listener for the "Play Again" button click
+function handlePlayAgainClick(event) {
+    const canvas = event.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
+
+    // Check if the click was within the "Play Again" button's drawn area
+    if (clickX >= playAgainButton.currentX && clickX <= playAgainButton.currentX + playAgainButton.currentWidth &&
+        clickY >= playAgainButton.currentY && clickY <= playAgainButton.currentY + playAgainButton.currentHeight) {
+        resetGame(); // Call resetGame which will then call showMainMenu
+    }
+}
+
+
 /**
- * Adds event listeners for summary screen scrolling/dragging.
+ * Adds event listeners for summary screen scrolling/dragging and the "Play Again" button.
  * @param {HTMLCanvasElement} canvas - The game canvas.
  */
 export function addSummaryEventListeners(canvas) {
@@ -83,6 +99,7 @@ export function addSummaryEventListeners(canvas) {
         canvas.addEventListener('mousemove', handleSummaryMouseMove);
         canvas.addEventListener('mouseup', handleSummaryMouseUp);
         canvas.addEventListener('mouseout', handleSummaryMouseOut); // Use mouseout on canvas itself
+        canvas.addEventListener('click', handlePlayAgainClick); // ADDED: Click listener for Play Again button
 
         canvas._summaryListenersAdded = true;
         summaryScrollYOffset = 0; // Reset scroll on entering summary
@@ -90,7 +107,7 @@ export function addSummaryEventListeners(canvas) {
 }
 
 /**
- * Removes event listeners for summary screen scrolling/dragging.
+ * Removes event listeners for summary screen scrolling/dragging and the "Play Again" button.
  * @param {HTMLCanvasElement} canvas - The game canvas.
  */
 export function removeSummaryEventListeners(canvas) {
@@ -100,6 +117,7 @@ export function removeSummaryEventListeners(canvas) {
         canvas.removeEventListener('mousemove', handleSummaryMouseMove);
         canvas.removeEventListener('mouseup', handleSummaryMouseUp);
         canvas.removeEventListener('mouseout', handleSummaryMouseOut);
+        canvas.removeEventListener('click', handlePlayAgainClick); // ADDED: Remove click listener
 
         canvas._summaryListenersAdded = false;
         summaryScrollYOffset = 0; // Reset scroll position for next time
@@ -339,7 +357,7 @@ export function displayGameSummary(characters, gameStartTime, gameEndTime, canva
         rankedCharacters.push({
             char: char,
             timeAliveMs: timeAliveMs,
-            timeAliveSeconds: (timeAliveMs / 1000).toFixed(1)
+            // timeAliveSeconds: (timeAliveMs / 1000).toFixed(1) // Removed this line, as it's not displayed
         });
     });
 
@@ -347,6 +365,7 @@ export function displayGameSummary(characters, gameStartTime, gameEndTime, canva
         if (a.char === winner) return -1;
         if (b.char === winner) return 1;
 
+        // Use timeAliveMs in scoring calculation, even if not displayed
         const a_score = (a.char.damageDealt * 0.2) + (a.char.kills * 100) + (a.char.healingDone * 0.5) + (a.timeAliveMs * 0.01);
         const b_score = (b.char.damageDealt * 0.2) + (b.char.kills * 100) + (b.char.healingDone * 0.5) + (b.timeAliveMs * 0.01);
 
@@ -383,15 +402,10 @@ export function displayGameSummary(characters, gameStartTime, gameEndTime, canva
 
         offscreenCtx.font = `${16 * CHARACTER_SCALE_FACTOR}px 'Inter', sans-serif`;
         offscreenCtx.fillStyle = '#cbd5e0';
-        offscreenCtx.fillText(`Health: ${char.health.toFixed(0)} | Time Alive: ${data.timeAliveSeconds}s`, offscreenCanvas.width / 2, currentContentY + (45 * CHARACTER_SCALE_FACTOR));
-        offscreenCtx.fillText(`Kills: ${char.kills} | Damage: ${char.damageDealt.toFixed(0)} | Healing: ${char.healingDone.toFixed(0)}`, offscreenCanvas.width / 2, currentContentY + (60 * CHARACTER_SCALE_FACTOR));
+        // MODIFIED: Removed 'Time Alive' from the display string
+        offscreenCtx.fillText(`Health: ${char.health.toFixed(0)} | Kills: ${char.kills} | Damage: ${char.damageDealt.toFixed(0)} | Healing: ${char.healingDone.toFixed(0)}`, offscreenCanvas.width / 2, currentContentY + (45 * CHARACTER_SCALE_FACTOR));
         currentContentY += contentLineHeight;
     });
-
-    // Add event listeners for summary scrolling only once, when the summary screen is initially set up.
-    // This is called from gameLoop, so we need to ensure the `addSummaryEventListeners` is managed
-    // such that it's called ONCE upon currentScreen transition to 'summary'.
-    // `gameLoop.js` will handle calling add/removeSummaryEventListeners at the correct state transitions.
 
     // Draw the clipped portion of the offscreen canvas onto the main canvas
     ctx.drawImage(offscreenCanvas,

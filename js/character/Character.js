@@ -85,8 +85,8 @@ export class Character {
         this.kills = 0;
         this.damageDealt = 0;
         this.healingDone = 0;
-        this.spawnTime = 0;
-        this.deathTime = 0;
+        this.spawnTime = 0; // Re-added: Initialize to 0
+        this.deathTime = 0; // Re-added: Initialize to 0
 
         this.x = Math.random() * (this.canvas.width - this.width);
         this.y = Math.random() * (this.canvas.height - this.height);
@@ -149,7 +149,7 @@ export class Character {
         if (this.health <= 0) {
             this.health = 0;
             this.isAlive = false;
-            this.deathTime = performance.now();
+            this.deathTime = performance.now(); // Re-added: Set deathTime when character is defeated
             displayMessage(`${this.name} has been defeated!`);
 
             const killer = allCharacters.find(char => char.name === attackerName);
@@ -182,7 +182,7 @@ export class Character {
             if (this.health <= 0) { // Check for death from bleed
                 this.health = 0;
                 this.isAlive = false;
-                this.deathTime = performance.now();
+                this.deathTime = performance.now(); // Re-added: Set deathTime if character bleeds out
                 displayMessage(`${this.name} bled out!`);
                 const killer = characters.find(char => char.name === this.bleedTarget); // Attribute kill to the bleeder
                 if (killer) {
@@ -512,7 +512,7 @@ export class Character {
                     this.ctx.globalAlpha = this.moveEffect.alpha;
                     this.ctx.fillStyle = this.moveEffect.color;
                     this.ctx.beginPath();
-                    this.ctx.arc(this.moveEffect.x, this.moveEffect.y, this.moveEffect.radius, 0, Math.PI * 2);
+                    this.ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.moveEffect.radius, 0, Math.PI * 2);
                     this.ctx.fill();
                     this.ctx.restore();
                 }

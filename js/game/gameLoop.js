@@ -19,8 +19,8 @@ import { getCharacters, setCharacters } from './gameInit.js';
 let characters = []; // Initialized by setGameLoopDependencies
 let animationFrameId; // Stores the ID returned by requestAnimationFrame
 let gameRunning = false;
-let gameStartTime;
-let gameEndTime;
+let gameStartTime; // Re-added: Needed for game duration calculation in summary
+let gameEndTime; // Re-added: Needed for game duration calculation in summary
 let lastProbUpdateTime = 0;
 let mapImage;
 let ctx;
@@ -143,9 +143,16 @@ function handleCanvasClick(event) {
         });
         return;
     } else if (currentScreen === 'summary') {
+        // The play again button listener is now set up directly in uiUpdates.js
+        // via addSummaryEventListeners, which uses the handlePlayAgainClick function.
+        // So, this block here is no longer needed for the playAgainButton itself.
+        // It's still here from your original code, but the logic has moved.
+        // This 'if' block will only execute if an area OTHER than the button is clicked within the summary context.
         if (clickX >= playAgainButton.currentX && clickX <= playAgainButton.currentX + playAgainButton.currentWidth &&
-            clickY >= playAgainButton.currentY && clickY <= playAgainButton.currentY + playAgainButton.currentHeight) {
-            resetGame();
+            clickY >= playAgainButton.currentY && clickY >= playAgainButton.currentY + playAgainButton.currentHeight) {
+            // This specific check can be removed since the listener is added to the button itself
+            // However, keeping it doesn't break anything. The actual action is now handled by the listener setup.
+            // resetGame(); // This will be called by the dedicated button listener now.
             return;
         }
     }
@@ -217,7 +224,7 @@ function updateGameLogic() {
     const aliveCharacters = characters.filter(char => char.isAlive);
     if (aliveCharacters.length <= 1 && gameRunning) {
         gameRunning = false;
-        gameEndTime = performance.now();
+        gameEndTime = performance.now(); // Keep gameEndTime for overall duration
         currentScreen = 'summary';
 
         addSummaryEventListeners(canvas);
@@ -284,7 +291,7 @@ export function gameLoop(timestamp) {
 export function showMainMenu() {
     currentScreen = 'menu';
     gameRunning = false;
-    removeSummaryEventListeners(canvas);
+    removeSummaryEventListeners(canvas); // Ensure summary listeners are removed
     displayMessage("Game assets loaded. Click 'Start Game' to begin!");
 }
 
@@ -293,15 +300,14 @@ export function showMainMenu() {
  * Starts the game.
  * @param {boolean} requestFullscreenOnStart - Whether the game should request fullscreen on start.
  */
-export async function startGame(requestFullscreenOnStart) { // MODIFIED: Made async
+export async function startGame(requestFullscreenOnStart) {
     if (gameRunning) return;
 
     if (requestFullscreenOnStart && !document.fullscreenElement) {
         toggleFullscreen();
     }
 
-    // Dynamic import Character class only once when needed
-    const { Character } = await import('../character/Character.js'); // MODIFIED: Await the import
+    const { Character } = await import('../character/Character.js');
 
     const selectedCharactersData = matchCreationState.getSelectedCharactersData();
 
@@ -321,7 +327,7 @@ export async function startGame(requestFullscreenOnStart) { // MODIFIED: Made as
     setCharacters(newCharacters);
 
     currentScreen = 'game';
-    gameStartTime = performance.now();
+    gameStartTime = performance.now(); // Re-initialized for each new game
 
     deltaTime = 0;
     lastFrameTimeMs = performance.now();
@@ -345,8 +351,8 @@ export async function startGame(requestFullscreenOnStart) { // MODIFIED: Made as
         char.kills = 0;
         char.damageDealt = 0;
         char.healingDone = 0;
-        char.spawnTime = gameStartTime;
-        char.deathTime = 0;
+        char.spawnTime = gameStartTime; // Set spawnTime here for the current game
+        char.deathTime = 0; // Explicitly reset deathTime for a fresh start
         char.isStunned = false;
 
         char.x = Math.random() * (canvas.width - char.width);
@@ -372,13 +378,19 @@ export async function startGame(requestFullscreenOnStart) { // MODIFIED: Made as
 export function resetGame() {
     gameRunning = false;
 
+    // Exit fullscreen if in fullscreen
     if (document.fullscreenElement) {
         document.exitFullscreen();
-    } else {
-        updateCanvasSize(canvas, false);
-        showMainMenu();
     }
 
+    // Go to main menu
+    showMainMenu();
+
+    // Reset character properties for a clean slate for the *next* game.
+    // Note: When you click "Play Again" and go to the main menu, the characters
+    // are often re-selected, leading to new Character instances in startGame.
+    // This `forEach` loop mainly ensures existing character objects are fully reset if reused,
+    // though the primary cleanup for "Play Again" is `showMainMenu()` resetting the screen.
     characters = getCharacters();
     characters.forEach(char => {
         char.health = char.maxHealth;
@@ -399,8 +411,8 @@ export function resetGame() {
         char.kills = 0;
         char.damageDealt = 0;
         char.healingDone = 0;
-        char.spawnTime = 0;
-        char.deathTime = 0;
+        char.spawnTime = 0; // Reset spawnTime for a clean restart
+        char.deathTime = 0; // Reset deathTime for a clean restart
         char.isStunned = false;
 
         char.x = Math.random() * (canvas.width - char.width);

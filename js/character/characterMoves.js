@@ -7,15 +7,15 @@ import {
     ORIGINAL_SPEED_MAGNITUDE,
     SWARM_DURATION_FRAMES,
     SWARM_BEE_DAMAGE_PER_TICK,
-    FEEDING_FRENZY_DURATION_FRAMES, // Import new constant
-    FEEDING_FRENZY_ATTACK_SPEED_BOOST, // Import new constant
-    FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE, // Import new constant
-    VOLATILE_CONCOCTION_PROJECTILE_SPEED, // NEW
-    VOLATILE_CONCOCTION_EXPLOSION_RADIUS, // NEW
-    VOLATILE_CONCOCTION_DAMAGE, // NEW
-    VOLATILE_CONCOCTION_HEAL, // NEW
-    VOLATILE_CONCOCTION_STUN_DURATION_FRAMES, // NEW
-    HONEYCOMB_STUN_DURATION_FRAMES // Reused for Alchemist stun
+    FEEDING_FRENZY_DURATION_FRAMES,
+    FEEDING_FRENZY_ATTACK_SPEED_BOOST,
+    FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE,
+    VOLATILE_CONCOCTION_PROJECTILE_SPEED,
+    VOLATILE_CONCOCTION_EXPLOSION_RADIUS,
+    VOLATILE_CONCOCTION_DAMAGE,
+    VOLATILE_CONCOCTION_HEAL,
+    VOLATILE_CONCOCTION_STUN_DURATION_FRAMES,
+    HONEYCOMB_STUN_DURATION_FRAMES
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -41,8 +41,8 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                 minDistance = dist;
                 nearestOpponent = otherChar;
             }
-        } // <-- MISSING '}' WAS HERE
-    }); // Corrected: This parenthesis now correctly closes the forEach call.
+        }
+    });
 
     switch (character.moveType) {
         case 'confetti':
@@ -175,7 +175,6 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                     life: 60
                 };
                 displayMessage(`${character.name} threw a Shuriken!`);
-                // Initial hit check for shuriken (if target is very close)
                 if (checkDistance(character, nearestOpponent) < character.width * 1.5 && !nearestOpponent.isBlockingShuriken && !nearestOpponent.isPhasing) {
                     const damage = 25;
                     nearestOpponent.takeDamage(damage, character.attack, character.name, allCharacters);
@@ -218,7 +217,7 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
             };
             displayMessage(`${character.name} lets out a spectral cry!`);
             break;
-        case 'swarm': // Queen Bee's special move
+        case 'swarm':
             character.moveEffect = {
                 type: 'swarm',
                 bees: [],
@@ -226,9 +225,7 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                 target: nearestOpponent
             };
 
-            // Create mini bees spawned randomly within Queen Bee's bounds (or slightly outside)
-            // with no initial velocity, letting flocking behavior take over.
-            const spawnRadius = character.width * 0.7; // Spawn within a radius around Queen Bee's center
+            const spawnRadius = character.width * 0.7;
             for (let i = 0; i < 5; i++) {
                 const angleOffset = Math.random() * Math.PI * 2;
                 const distanceOffset = Math.random() * spawnRadius;
@@ -249,16 +246,14 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
             }
             displayMessage(`${character.name} unleashes a Swarm of Bees!`);
             break;
-        case 'feeding_frenzy': // Shark's special move
+        case 'feeding_frenzy':
             character.moveEffect = {
                 type: 'feeding_frenzy',
-                duration: FEEDING_FRENZY_DURATION_FRAMES, // Use the constant
-                originalAttack: character.attack, // Store original attack for reset
-                originalAttackSpeed: character.speed // Store original speed for reset (attack speed)
+                duration: FEEDING_FRENZY_DURATION_FRAMES,
+                originalAttack: character.attack,
+                originalAttackSpeed: character.speed
             };
-            // Apply buffs
-            character.speed *= FEEDING_FRENZY_ATTACK_SPEED_BOOST; // Increase attack speed (represented by character speed)
-            // Recalculate movement vector with new speed
+            character.speed *= FEEDING_FRENZY_ATTACK_SPEED_BOOST;
             const currentAngleFrenzy = Math.atan2(character.dy, character.dx);
             const newSpeedMagnitudeFrenzy = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
             character.dx = Math.cos(currentAngleFrenzy) * newSpeedMagnitudeFrenzy;
@@ -266,16 +261,15 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
 
             displayMessage(`${character.name} entered a Feeding Frenzy!`);
             break;
-        case 'volatile_concoction': // NEW: Alchemist's Special Move
+        case 'volatile_concoction':
             if (nearestOpponent) {
                 const projectileSpeed = VOLATILE_CONCOCTION_PROJECTILE_SPEED * CHARACTER_SCALE_FACTOR;
                 const angleToOpponent = Math.atan2(nearestOpponent.y + nearestOpponent.height / 2 - (character.y + character.height / 2),
                                                    nearestOpponent.x + nearestOpponent.width / 2 - (character.x + character.width / 2));
 
-                // Randomly choose an effect type: damage, heal, or stun
                 const effectChoices = ['damage', 'heal', 'stun'];
                 const chosenEffect = effectChoices[Math.floor(Math.random() * effectChoices.length)];
-                let projectileColor = 'gray'; // Default
+                let projectileColor = 'gray';
                 if (chosenEffect === 'damage') projectileColor = 'red';
                 else if (chosenEffect === 'heal') projectileColor = 'green';
                 else if (chosenEffect === 'stun') projectileColor = 'purple';
@@ -286,11 +280,11 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                     y: character.y + character.height / 2,
                     vx: Math.cos(angleToOpponent) * projectileSpeed,
                     vy: Math.sin(angleToOpponent) * projectileSpeed,
-                    radius: 15 * CHARACTER_SCALE_FACTOR, // Potion size
-                    life: 120, // Projectile lifespan in frames
-                    effectType: chosenEffect, // Store the chosen effect
+                    radius: 15 * CHARACTER_SCALE_FACTOR,
+                    life: 120,
+                    effectType: chosenEffect,
                     color: projectileColor,
-                    hasExploded: false // Flag to ensure explosion only happens once
+                    hasExploded: false
                 };
                 displayMessage(`${character.name} threw a Volatile Concoction! (${chosenEffect})`);
             } else {
@@ -433,25 +427,22 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
             };
             displayMessage(`${character.name} lets out a spectral cry!`);
             break;
-        case 'swarm': // Update logic for Queen Bee's Swarm
+        case 'swarm':
             if (character.moveEffect && character.moveEffect.type === 'swarm') {
                 character.moveEffect.duration--;
 
                 const target = character.moveEffect.target;
                 if (target && target.isAlive) {
-                    const trackingStrength = 0.05; // How strongly bees move towards the target
-                    const separationStrength = 0.1; // How strongly bees repel each other (increased for spread)
-                    const randomWanderStrength = 0.02; // Small random motion for organic look
+                    const trackingStrength = 0.05;
+                    const separationStrength = 0.1;
+                    const randomWanderStrength = 0.02;
 
                     character.moveEffect.bees.forEach(bee => {
-                        // Handle clinging bees separately
                         if (bee.clingingTo) {
-                            // Update bee's position to follow the clinging target
                             bee.x = bee.clingingTo.x + bee.offsetX;
                             bee.y = bee.clingingTo.y + bee.offsetY;
 
-                            // Re-apply damage for clinging bees periodically
-                            if (character.moveEffect.duration % 15 === 0 && !bee.damageApplied) { // Damage every ~15 frames for clinging
+                            if (character.moveEffect.duration % 15 === 0 && !bee.damageApplied) {
                                 if (bee.clingingTo.isAlive) {
                                     const damage = SWARM_BEE_DAMAGE_PER_TICK;
                                     bee.clingingTo.takeDamage(damage, character.attack, character.name, allCharacters);
@@ -459,26 +450,23 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                                     bee.damageApplied = true;
                                 }
                             }
-                            return; // Skip swarm movement logic for clinging bees
+                            return;
                         }
 
-                        // Normal swarm behavior for non-clinging bees
                         let totalForceX = 0;
                         let totalForceY = 0;
 
-                        // 1. Force towards target
                         const angleToTarget = Math.atan2(target.y - bee.y, target.x - bee.x);
                         totalForceX += Math.cos(angleToTarget) * trackingStrength;
                         totalForceY += Math.sin(angleToTarget) * trackingStrength;
 
-                        // 2. Separation from other bees
                         character.moveEffect.bees.forEach(otherBee => {
-                            if (bee !== otherBee && !otherBee.clingingTo) { // Only separate from other non-clinging bees
+                            if (bee !== otherBee && !otherBee.clingingTo) {
                                 const dist = checkDistance(
                                     {x: bee.x, y: bee.y, width: bee.size, height: bee.size},
                                     {x: otherBee.x, y: otherBee.y, width: otherBee.size, height: otherBee.size}
                                 );
-                                if (dist < bee.size * 3) { // Repel if within 3x bee size
+                                if (dist < bee.size * 3) {
                                     const angleAway = Math.atan2(bee.y - otherBee.y, bee.x - otherBee.x);
                                     totalForceX += (Math.cos(angleAway) / dist) * separationStrength;
                                     totalForceY += (Math.sin(angleAway) / dist) * separationStrength;
@@ -486,22 +474,19 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                             }
                         });
 
-                        // 3. Random wander
                         totalForceX += (Math.random() - 0.5) * randomWanderStrength;
                         totalForceY += (Math.random() - 0.5) * randomWanderStrength;
 
 
-                        // Apply force to velocity
                         bee.vx += totalForceX;
                         bee.vy += totalForceY;
 
-                        // Limit bee speed (normalize velocity to a max speed)
                         const currentBeeSpeed = Math.sqrt(bee.vx * bee.vx + bee.vy * bee.vy);
-                        const maxBeeSpeed = 7 * CHARACTER_SCALE_FACTOR; // Max movement speed for individual bees
+                        const maxBeeSpeed = 7 * CHARACTER_SCALE_FACTOR;
                         if (currentBeeSpeed > maxBeeSpeed) {
                             bee.vx = (bee.vx / currentBeeSpeed) * maxBeeSpeed;
                             bee.vy = (bee.vy / currentBeeSpeed) * maxBeeSpeed;
-                        } else if (currentBeeSpeed < 1 * CHARACTER_SCALE_FACTOR && currentBeeSpeed > 0) { // Ensure minimum movement
+                        } else if (currentBeeSpeed < 1 * CHARACTER_SCALE_FACTOR && currentBeeSpeed > 0) {
                              bee.vx = (bee.vx / currentBeeSpeed) * (1 * CHARACTER_SCALE_FACTOR);
                              bee.vy = (bee.vy / currentBeeSpeed) * (1 * CHARACTER_SCALE_FACTOR);
                         }
@@ -509,30 +494,25 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                         bee.x += bee.vx;
                         bee.y += bee.vy;
 
-                        // Check for collision with target (only for non-clinging bees)
                         if (!bee.damageApplied && !bee.clingingTo && checkDistance({x: bee.x, y: bee.y, width: bee.size, height: bee.size}, target) < target.width / 2) {
                             const damage = SWARM_BEE_DAMAGE_PER_TICK;
                             target.takeDamage(damage, character.attack, character.name, allCharacters);
                             character.damageDealt += damage;
                             bee.damageApplied = true;
 
-                            // Make the bee cling to the target
                             bee.clingingTo = target;
-                            // Calculate offset relative to target's top-left for varied clinging positions
                             bee.offsetX = (bee.x - target.x) + (Math.random() - 0.5) * target.width * 0.3;
                             bee.offsetY = (bee.y - target.y) + (Math.random() - 0.5) * target.height * 0.3;
-                            bee.vx = 0; // Stop its movement
+                            bee.vx = 0;
                             bee.vy = 0;
                             displayMessage(`A mini bee clung to ${target.name}!`);
                         }
                     });
                 }
 
-                // Reset damageApplied for next tick (applies to both moving and clinging bees)
-                // This ensures clinging bees can deal damage in subsequent ticks as well.
-                if (character.moveEffect.duration % 15 === 0) { // Reset for clinging bees every 15 frames for damage tick
+                if (character.moveEffect.duration % 15 === 0) {
                     character.moveEffect.bees.forEach(bee => bee.damageApplied = false);
-                } else if (character.moveEffect.duration % 5 === 0) { // Reset for flying bees more frequently for smooth damage
+                } else if (character.moveEffect.duration % 5 === 0) {
                      character.moveEffect.bees.forEach(bee => {
                          if (!bee.clingingTo) bee.damageApplied = false;
                      });
@@ -545,18 +525,14 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                 }
             }
             break;
-        case 'feeding_frenzy': // Update logic for Shark's Feeding Frenzy
+        case 'feeding_frenzy':
             if (character.moveEffect && character.moveEffect.type === 'feeding_frenzy') {
                 character.moveEffect.duration--;
-
-                // The visual effect (red pulsing border) is handled in Character.draw() based on `moveEffect.duration`
 
                 if (character.moveEffect.duration <= 0) {
                     character.moveActive = false;
                     character.moveEffect = null;
-                    // Reset character's stats
-                    character.speed = character.originalSpeed; // Reset speed (attack speed)
-                    // Recalculate movement vector with original speed
+                    character.speed = character.originalSpeed;
                     const currentAngleReset = Math.atan2(character.dy, character.dx);
                     const newSpeedMagnitudeReset = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
                     character.dx = Math.cos(currentAngleReset) * newSpeedMagnitudeReset;
@@ -565,16 +541,14 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                 }
             }
             break;
-        case 'volatile_concoction': // NEW: Alchemist's Special Move Update
+        case 'volatile_concoction':
             if (character.moveEffect.type === 'volatile_projectile') {
                 character.moveEffect.x += character.moveEffect.vx;
                 character.moveEffect.y += character.moveEffect.vy;
                 character.moveEffect.life--;
 
                 let shouldExplode = false;
-                // Check for collision with any target
                 for (const target of allCharacters) {
-                    // IMPORTANT: Prevent Alchemist from affecting themselves
                     if (target !== character && target.isAlive && !target.isPhasing) {
                         const dist = checkDistance(
                             {x: character.moveEffect.x, y: character.moveEffect.y, width: character.moveEffect.radius * 2, height: character.moveEffect.radius * 2},
@@ -587,33 +561,29 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                     }
                 }
 
-                // Check for lifespan expiry or out of bounds
                 if (character.moveEffect.life <= 0 || shouldExplode ||
                     character.moveEffect.x < -character.moveEffect.radius || character.moveEffect.x > canvas.width + character.moveEffect.radius ||
                     character.moveEffect.y < -character.moveEffect.radius || character.moveEffect.y > canvas.height + character.moveEffect.radius) {
                     
-                    // Transform into an explosion effect
                     character.moveEffect = {
                         type: 'volatile_explosion',
                         x: character.moveEffect.x,
                         y: character.moveEffect.y,
-                        radius: 10 * CHARACTER_SCALE_FACTOR, // Starting small for explosion
+                        radius: 10 * CHARACTER_SCALE_FACTOR,
                         maxRadius: VOLATILE_CONCOCTION_EXPLOSION_RADIUS * CHARACTER_SCALE_FACTOR,
-                        duration: 30, // Frames for explosion animation (e.g., 0.5 seconds)
+                        duration: 30,
                         alpha: 1,
-                        effectType: character.moveEffect.effectType, // Carry over effect type
+                        effectType: character.moveEffect.effectType,
                         color: character.moveEffect.color,
-                        targetsHit: [] // To prevent hitting the same target multiple times
+                        targetsHit: []
                     };
                 }
             } else if (character.moveEffect.type === 'volatile_explosion') {
-                character.moveEffect.radius += (character.moveEffect.maxRadius - character.moveEffect.radius) * 0.2; // Grow quickly
-                character.moveEffect.alpha -= 1 / character.moveEffect.duration; // Fade out
+                character.moveEffect.radius += (character.moveEffect.maxRadius - character.moveEffect.radius) * 0.2;
+                character.moveEffect.alpha -= 1 / character.moveEffect.duration;
 
-                // Apply effects to targets in the explosion radius
                 if (character.moveEffect.duration > 0) {
                     allCharacters.forEach(target => {
-                        // IMPORTANT: Prevent Alchemist from affecting themselves
                         if (target !== character && target.isAlive && !target.isPhasing && !character.moveEffect.targetsHit.includes(target.name)) {
                             const dist = checkDistance(
                                 {x: character.moveEffect.x, y: character.moveEffect.y, width: character.moveEffect.radius * 2, height: character.moveEffect.radius * 2},
@@ -639,18 +609,17 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                                             target.speed = 0;
                                             target.dx = 0;
                                             target.dy = 0;
-                                            // Apply the 'volatile_concoction_stun' effect for visual differentiation
                                             target.secondaryAbilityActive = true;
                                             target.secondaryAbilityEffect = {
-                                                type: 'volatile_concoction_stun', // NEW type for Alchemist stun
-                                                duration: VOLATILE_CONCOCTION_STUN_DURATION_FRAMES // Use Alchemist specific stun duration
+                                                type: 'volatile_concoction_stun',
+                                                duration: VOLATILE_CONCOCTION_STUN_DURATION_FRAMES
                                             };
-                                            target.lastSecondaryAbilityTime = Date.now(); // Record when they got stuck
+                                            target.lastSecondaryAbilityTime = Date.now();
                                             displayMessage(`${target.name} was stunned by Volatile Concoction!`);
                                         }
                                         break;
                                 }
-                                character.moveEffect.targetsHit.push(target.name); // Mark as hit by this explosion
+                                character.moveEffect.targetsHit.push(target.name);
                             }
                         }
                     });
