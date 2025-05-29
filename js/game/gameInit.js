@@ -1,11 +1,11 @@
 // js/game/gameInit.js
 
-import { IMAGE_SOURCES, MAP_IMAGE_SOURCE, ORIGINAL_SPEED_MAGNITUDE } from '../config.js';
-import { Character } from '../character/Character.js';
-import { displayMessage } from '../utils/displayUtils.js';
-import { setGameLoopDependencies, startGame, resetGame, showMainMenu, toggleFullscreen } from './gameLoop.js';
-import { updateCanvasSize, setCalculateWinProbabilitiesFunction, CHARACTER_SCALE_FACTOR } from '../ui/uiUpdates.js';
-import { showMatchCreationMenu, matchCreationState } from './matchCreation.js'; // MODIFIED: Import matchCreationState
+import { IMAGE_SOURCES, MAP_IMAGE_SOURCE, ORIGINAL_SPEED_MAGNITUDE } from '../config.js'; // Imports remain
+import { Character } from '../character/Character.js'; // Imports remain
+import { displayMessage } from '../utils/displayUtils.js'; // Imports remain
+import { setGameLoopDependencies, startGame, resetGame, showMainMenu, toggleFullscreen } from './gameLoop.js'; // Imports remain
+import { updateCanvasSize, setCalculateWinProbabilitiesFunction, CHARACTER_SCALE_FACTOR } from '../ui/uiUpdates.js'; // Imports remain
+import { showMatchCreationMenu, matchCreationState } from './matchCreation.js'; // Imports remain
 
 let characters = [];
 let mapImage;
@@ -16,32 +16,32 @@ let ctx;
  * Initializes the game, loading assets and setting up UI.
  */
 export async function initGame() {
-    canvas = document.getElementById('gameCanvas');
-    ctx = canvas.getContext('2d');
+    canvas = document.getElementById('gameCanvas'); // Gets canvas element
+    ctx = canvas.getContext('2d'); // Gets 2D rendering context
 
-    updateCanvasSize(canvas, document.fullscreenElement);
+    updateCanvasSize(canvas, document.fullscreenElement); // Updates canvas size
 
-    setCalculateWinProbabilitiesFunction(calculateWinProbabilities);
+    setCalculateWinProbabilitiesFunction(calculateWinProbabilities); // Sets win probabilities function
 
-    displayMessage("Loading game assets...");
+    displayMessage("Loading game assets..."); // Displays loading message
 
-    mapImage = new Image();
-    mapImage.src = MAP_IMAGE_SOURCE;
+    mapImage = new Image(); // Creates new Image object for map
+    mapImage.src = MAP_IMAGE_SOURCE; // Sets map image source
     await new Promise((resolve, reject) => {
-        mapImage.onload = resolve;
+        mapImage.onload = resolve; // Resolves promise on map load
         mapImage.onerror = () => {
-            console.error(`Failed to load map image: ${MAP_IMAGE_SOURCE}`);
+            console.error(`Failed to load map image: ${MAP_IMAGE_SOURCE}`); // Logs error on map load failure
             // Fallback image for map in case of load error
-            mapImage.src = `https://placehold.co/${canvas.width}x${canvas.height}/000000/FFFFFF?text=MAP+LOAD+ERROR`;
-            mapImage.onload = resolve;
-            mapImage.onerror = reject;
+            mapImage.src = `https://placehold.co/${canvas.width}x${canvas.height}/000000/FFFFFF?text=MAP+LOAD+ERROR`; // Sets fallback map image source
+            mapImage.onload = resolve; // Resolves promise on fallback map load
+            mapImage.onerror = reject; // Rejects promise on fallback map load failure
         };
     });
 
-    const loadedImages = await Promise.all(IMAGE_SOURCES.map(src => {
+    const loadedImages = await Promise.all(IMAGE_SOURCES.map(src => { // Loads character images
         return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.src = src.url;
+            const img = new Image(); // Creates new Image object for character
+            img.src = src.url; // Sets character image source
             img.onload = () => resolve({
                 name: src.name,
                 image: img,
@@ -53,11 +53,11 @@ export async function initGame() {
                 secondaryAbility: src.secondaryAbility,
                 secondaryAbilityCooldown: src.secondaryAbilityCooldown,
                 isDummy: src.isDummy || false
-            });
+            }); // Resolves promise on character load
             img.onerror = () => {
-                console.error(`Failed to load image: ${src.url}`);
+                console.error(`Failed to load image: ${src.url}`); // Logs error on character load failure
                 // Fallback image for character in case of load error
-                img.src = `https://placehold.co/80x80/ff0000/FFFFFF?text=LOAD+ERROR`;
+                img.src = `https://placehold.co/80x80/ff0000/FFFFFF?text=LOAD+ERROR`; // Sets fallback character image source
                 img.onload = () => resolve({
                     name: src.name,
                     image: img,
@@ -69,28 +69,28 @@ export async function initGame() {
                     secondaryAbility: src.secondaryAbility,
                     secondaryAbilityCooldown: src.secondaryAbilityCooldown,
                     isDummy: src.isDummy || false
-                });
-                img.onerror = () => reject(new Error(`Critical: Fallback image failed for ${src.name}`));
+                }); // Resolves promise on fallback character load
+                img.onerror = () => reject(new Error(`Critical: Fallback image failed for ${src.name}`)); // Rejects promise on fallback character load failure
             };
         });
     }));
 
-    setGameLoopDependencies(canvas, ctx, characters, mapImage);
+    setGameLoopDependencies(canvas, ctx, characters, mapImage); // Sets game loop dependencies
 
     // Initialize match creation with all available characters
-    matchCreationState.setAvailableCharacters(loadedImages); // MODIFIED: Call on matchCreationState
+    matchCreationState.setAvailableCharacters(loadedImages); // Initializes available characters in match creation state
 
     // Show the main menu initially
-    showMainMenu();
-    displayMessage("Game assets loaded. Click 'Start Game' to begin!");
+    showMainMenu(); // Shows main menu
+    displayMessage("Game assets loaded. Click 'Start Game' to begin!"); // Displays welcome message
 }
 
-import { calculateWinProbabilities } from './gameLogic.js';
+import { calculateWinProbabilities } from './gameLogic.js'; // Imports calculateWinProbabilities
 
-export function getCharacters() {
+export function getCharacters() { // Exports getCharacters function
     return characters;
 }
 
-export function setCharacters(newCharacters) {
+export function setCharacters(newCharacters) { // Exports setCharacters function
     characters = newCharacters;
 }
