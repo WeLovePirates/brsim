@@ -1,6 +1,6 @@
 // js/game/gameLogic.js
 
-import { BASE_COLLISION_DAMAGE } from '../config.js';
+import { BASE_COLLISION_DAMAGE, CHARGE_IMPACT_DAMAGE } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkCollision } from '../utils/collisionUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -48,14 +48,24 @@ export function handleCollisions(characters) {
                     continue;
                 }
 
-                const damage1 = BASE_COLLISION_DAMAGE;
-                const damage2 = BASE_COLLISION_DAMAGE;
+                // NEW: Tank's Charge special case - only charging Tank deals collision damage
+                let damage1 = BASE_COLLISION_DAMAGE;
+                let damage2 = BASE_COLLISION_DAMAGE;
+
+                if (char1.moveType === 'charge' && char1.moveActive) { // char1 is charging
+                    damage1 = CHARGE_IMPACT_DAMAGE;
+                    damage2 = 0; // The charging character doesn't take damage from collision
+                } else if (char2.moveType === 'charge' && char2.moveActive) { // char2 is charging
+                    damage2 = CHARGE_IMPACT_DAMAGE;
+                    damage1 = 0; // The charging character doesn't take damage from collision
+                }
 
                 char1.takeDamage(damage1, char2.attack, char2.name, characters);
                 char2.takeDamage(damage2, char1.attack, char1.name, characters);
 
                 char2.damageDealt += damage1;
                 char1.damageDealt += damage2;
+
 
                 // Simple repulsion to prevent characters from sticking
                 const overlapX = Math.min(char1.x + char1.width, char2.x + char2.width) - Math.max(char1.x, char2.x);
@@ -95,7 +105,7 @@ export function applyStaticFieldDamage(characters) {
     characters.forEach(char => {
         if (char.isAlive && char.secondaryAbilityActive && char.secondaryAbilityEffect && char.secondaryAbilityEffect.type === 'static_field') {
             characters.forEach(target => {
-                if (target !== char && target.isAlive && !target.isDummy && checkDistance(char, target) < char.secondaryAbilityEffect.radius) {
+                if (target !== char && target.isAlive && !target.isDummy && !target.isPhasing && checkDistance(char, target) < char.secondaryAbilityEffect.radius) {
                     target.health -= char.secondaryAbilityEffect.tickDamage;
                     char.damageDealt += char.secondaryAbilityEffect.tickDamage;
                     if (target.health <= 0) {
@@ -113,29 +123,18 @@ export function applyStaticFieldDamage(characters) {
 
 /**
  * Handles shuriken projectile collision.
+ * Now handled more generally in updateMoveEffect in characterMoves.js
+ * (Kept for compatibility, but its logic might be minimal or removed soon)
  * @param {Array<Character>} characters - The array of character objects.
  */
 export function handleShurikenCollisions(characters) {
+    // This function is largely superseded by direct projectile collision logic in characterMoves.js
+    // Keeping it for now to avoid breaking existing flow, but its impact is minimal.
     characters.forEach(ninja => {
         if (ninja.isAlive && ninja.moveType === 'shuriken' && ninja.moveActive) {
-            if (ninja.moveEffect) {
-                const projectileX = ninja.moveEffect.x;
-                const projectileY = ninja.moveEffect.y;
-
-                characters.forEach(target => {
-                    if (target !== ninja && target.isAlive && !target.isBlockingShuriken && !target.isDummy && !target.isPhasing &&
-                        checkDistance({ x: projectileX, y: projectileY, width: 0, height: 0 }, target) < target.width / 2) {
-                        const damage = 25;
-                        target.takeDamage(damage, ninja.attack, ninja.name, characters);
-                        ninja.damageDealt += damage;
-                        ninja.moveActive = false;
-                        ninja.moveEffect = null;
-                    }
-                });
-            } else {
-                ninja.moveActive = false;
-                ninja.moveEffect = null;
-            }
+            // The actual collision and damage logic for shuriken is now primarily within
+            // updateMoveEffect in characterMoves.js, which checks collision with the projectile's target.
+            // This function might become obsolete or simplified if all projectile logic moves there.
         }
     });
 }

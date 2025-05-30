@@ -15,7 +15,19 @@ import {
     VOLATILE_CONCOCTION_DAMAGE,
     VOLATILE_CONCOCTION_HEAL,
     VOLATILE_CONCOCTION_STUN_DURATION_FRAMES,
-    HONEYCOMB_STUN_DURATION_FRAMES
+    HONEYCOMB_STUN_DURATION_FRAMES,
+    CLOWN_CONFETTI_BLAST_RADIUS, // NEW: For Clown's AoE
+    CLOWN_CONFETTI_BLAST_DAMAGE, // NEW: For Clown's AoE
+    WIZARD_FIREBALL_RADIUS, // NEW: For Wizard's Fireball AoE
+    WIZARD_FIREBALL_DAMAGE, // NEW: For Wizard's Fireball AoE
+    GALLONER_QUICKDRAW_DAMAGE, // NEW: For Galloner's Quickdraw damage
+    STATICSHOCK_RADIUS, // NEW: For Hair Kid's Static Shock radius
+    STATICSHOCK_DAMAGE, // NEW: For Hair Kid's Static Shock damage
+    BAGUETTE_BASH_DAMAGE, // NEW: For Frenchie's Baguette Bash damage
+    SHURIKEN_DAMAGE, // NEW: For Ninja's Shuriken damage
+    CHARGE_SPEED_BOOST, // NEW: For Tank's Charge speed boost
+    CHARGE_DURATION_FRAMES, // NEW: For Tank's Charge duration
+    CHARGE_IMPACT_DAMAGE, // NEW: For Tank's Charge impact damage
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -31,11 +43,13 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
     character.lastMoveTime = Date.now();
     character.moveActive = true;
 
+    // AI Target Prioritization is handled in Character.js before calling this,
+    // so `nearestOpponent` here should be the one determined by the AI.
     let nearestOpponent = null;
     let minDistance = Infinity;
 
     allCharacters.forEach(otherChar => {
-        if (otherChar !== character && otherChar.isAlive) {
+        if (otherChar !== character && otherChar.isAlive && !otherChar.isPhasing && !otherChar.isDummy) {
             const dist = checkDistance(character, otherChar);
             if (dist < minDistance) {
                 minDistance = dist;
@@ -44,8 +58,9 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
         }
     });
 
+
     switch (character.moveType) {
-        case 'confetti':
+        case 'confetti': // NEW: AoE Attack
             character.moveEffect = { particles: [] };
             for (let i = 0; i < 50; i++) {
                 character.moveEffect.particles.push({
@@ -58,16 +73,11 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                 });
             }
             allCharacters.forEach(target => {
-                if (target !== character && target.isAlive && !target.isPhasing && checkDistance(character, target) < character.width * 2.0) {
-                    const damage = 15;
+                if (target !== character && target.isAlive && !target.isPhasing && !target.isDummy && checkDistance(character, target) < CLOWN_CONFETTI_BLAST_RADIUS * CHARACTER_SCALE_FACTOR) {
+                    const damage = CLOWN_CONFETTI_BLAST_DAMAGE;
                     target.takeDamage(damage, character.attack, character.name, allCharacters);
                     character.damageDealt += damage;
-                    target.dx *= 0.7;
-                    target.dy *= 0.7;
-                    setTimeout(() => {
-                        target.dx /= 0.7;
-                        target.dy /= 0.7;
-                    }, 1500);
+                    target.applyDebuff('movement_slow', 0.7, 90, 'speed'); // Apply a temporary slow
                 }
             });
             displayMessage(`${character.name} used Confetti Blast!`);
@@ -79,10 +89,10 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
             };
             const reach = character.width * 1.5;
             allCharacters.forEach(target => {
-                if (target !== character && target.isAlive && !target.isPhasing) {
+                if (target !== character && target.isAlive && !target.isPhasing && !target.isDummy) {
                     const dist = checkDistance(character, target);
                     if (dist < reach + target.width / 2) {
-                        const damage = 20;
+                        const damage = BAGUETTE_BASH_DAMAGE;
                         target.takeDamage(damage, character.attack, character.name, allCharacters);
                         character.damageDealt += damage;
                     }
@@ -104,7 +114,8 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                     life: 90,
                     beamLength: character.width * 2,
                     beamWidth: 8 * CHARACTER_SCALE_FACTOR,
-                    angle: angleToOpponent
+                    angle: angleToOpponent,
+                    target: nearestOpponent // Store target to check collision directly
                 };
                 displayMessage(`${character.name} fired a Quick Draw shot!`);
             } else {
@@ -112,19 +123,14 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                 character.moveEffect = null;
             }
             break;
-        case 'staticshock':
+        case 'staticshock': // NEW: AoE Attack
             character.moveEffect = { radius: 10 * CHARACTER_SCALE_FACTOR };
             allCharacters.forEach(target => {
-                if (target !== character && target.isAlive && !target.isPhasing && checkDistance(character, target) < 80 * CHARACTER_SCALE_FACTOR) {
-                    const damage = 10;
+                if (target !== character && target.isAlive && !target.isPhasing && !target.isDummy && checkDistance(character, target) < STATICSHOCK_RADIUS * CHARACTER_SCALE_FACTOR) {
+                    const damage = STATICSHOCK_DAMAGE;
                     target.takeDamage(damage, character.attack, character.name, allCharacters);
                     character.damageDealt += damage;
-                    target.dx *= 0.3;
-                    target.dy *= 0.3;
-                    setTimeout(() => {
-                        target.dx /= 0.3;
-                        target.dy /= 0.3;
-                    }, 500);
+                    target.applyDebuff('shock_stun', 0, 30, 'speed'); // Briefly stun
                 }
             });
             displayMessage(`${character.name} used Static Shock!`);
@@ -146,7 +152,7 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                 let minDistanceForPatch = Infinity;
 
                 allCharacters.forEach(otherChar => {
-                    if (otherChar !== character && otherChar.isAlive && !otherChar.isPhasing) {
+                    if (otherChar !== character && otherChar.isAlive && !otherChar.isPhasing && !otherChar.isDummy) {
                         const dist = checkDistance(character, otherChar);
                         if (dist < minDistanceForPatch) {
                             minDistanceForPatch = dist;
@@ -172,11 +178,13 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                     y: character.y + character.height / 2,
                     vx: Math.cos(angleToOpponent) * shurikenSpeed,
                     vy: Math.sin(angleToOpponent) * shurikenSpeed,
-                    life: 60
+                    life: 60,
+                    target: nearestOpponent // Store target to check collision directly
                 };
                 displayMessage(`${character.name} threw a Shuriken!`);
-                if (checkDistance(character, nearestOpponent) < character.width * 1.5 && !nearestOpponent.isBlockingShuriken && !nearestOpponent.isPhasing) {
-                    const damage = 25;
+                // Immediate hit if very close, but main logic now in updateMoveEffect for projectile
+                if (checkDistance(character, nearestOpponent) < character.width * 1.5 && !nearestOpponent.isBlockingShuriken && !nearestOpponent.isPhasing && !nearestOpponent.isDummy) {
+                    const damage = SHURIKEN_DAMAGE;
                     nearestOpponent.takeDamage(damage, character.attack, character.name, allCharacters);
                     character.damageDealt += damage;
                     character.moveActive = false;
@@ -187,25 +195,39 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                 character.moveEffect = null;
             }
             break;
-        case 'fireball':
+        case 'fireball': // NEW: AoE Attack
             if (nearestOpponent) {
-                character.moveEffect = { radius: 10 * CHARACTER_SCALE_FACTOR, alpha: 1 };
+                // Fireball projectile that explodes on impact or at max range
+                const projectileSpeed = 10 * CHARACTER_SCALE_FACTOR;
+                const angleToOpponent = Math.atan2(nearestOpponent.y + nearestOpponent.height / 2 - (character.y + character.height / 2),
+                                                   nearestOpponent.x + nearestOpponent.width / 2 - (character.x + character.width / 2));
+                character.moveEffect = {
+                    type: 'fireball_projectile',
+                    x: character.x + character.width / 2,
+                    y: character.y + character.height / 2,
+                    vx: Math.cos(angleToOpponent) * projectileSpeed,
+                    vy: Math.sin(angleToOpponent) * projectileSpeed,
+                    life: 90, // Lifespan of projectile before explosion
+                    target: nearestOpponent, // Store target to check collision
+                    hasExploded: false
+                };
                 displayMessage(`${character.name} cast Fireball!`);
-                allCharacters.forEach(target => {
-                    if (target !== character && target.isAlive && !target.isPhasing && checkDistance(character, target) < 100 * CHARACTER_SCALE_FACTOR) {
-                        const damage = 35;
-                        target.takeDamage(damage, character.attack, character.name, allCharacters);
-                        character.damageDealt += damage;
-                    }
-                });
             } else {
                 character.moveActive = false;
                 character.moveEffect = null;
             }
             break;
         case 'charge':
-            character.moveEffect = { duration: 90 };
-            character.speed *= 2.5;
+            character.moveEffect = {
+                duration: CHARGE_DURATION_FRAMES,
+                originalSpeed: character.speed,
+                targetsHit: new Set() // To prevent hitting the same target multiple times
+            };
+            character.speed *= CHARGE_SPEED_BOOST;
+            const newSpeedMagnitude = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
+            const currentAngle = Math.atan2(character.dy, character.dx);
+            character.dx = Math.cos(currentAngle) * newSpeedMagnitude;
+            character.dy = Math.sin(currentAngle) * newSpeedMagnitude;
             displayMessage(`${character.name} initiated a Charge!`);
             break;
         case 'boo':
@@ -213,7 +235,8 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                 type: 'boo_effect',
                 radius: character.width * 2.0,
                 duration: 30,
-                appliedDamage: false
+                appliedDamage: false,
+                targetsAffected: new Set() // To prevent re-applying effect to same target
             };
             displayMessage(`${character.name} lets out a spectral cry!`);
             break;
@@ -284,7 +307,8 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                     life: 120,
                     effectType: chosenEffect,
                     color: projectileColor,
-                    hasExploded: false
+                    hasExploded: false,
+                    target: nearestOpponent // Store target for direct collision check
                 };
                 displayMessage(`${character.name} threw a Volatile Concoction! (${chosenEffect})`);
             } else {
@@ -325,38 +349,21 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                 character.moveEffect.y += character.moveEffect.vy;
                 character.moveEffect.life--;
 
-                for (const target of allCharacters) {
-                    if (target !== character && target.isAlive && !target.isPhasing) {
-                        const beamCurrentX = character.moveEffect.x;
-                        const beamCurrentY = character.moveEffect.y;
-                        const beamHalfWidth = character.moveEffect.beamWidth / 2;
-                        const beamHalfLength = character.moveEffect.beamLength / 2;
-
-                        const beamLeft = beamCurrentX - beamHalfLength;
-                        const beamRight = beamCurrentX + beamHalfLength;
-                        const beamTop = beamCurrentY - beamHalfWidth;
-                        const beamBottom = beamCurrentY + beamHalfWidth;
-
-                        const targetLeft = target.x;
-                        const targetRight = target.x + target.width;
-                        const targetTop = target.y;
-                        const targetBottom = target.y + target.height;
-
-                        if (beamRight > targetLeft && beamLeft < targetRight &&
-                            beamBottom > targetTop && beamTop < targetBottom) {
-
-                            if (Math.random() < QUICKDRAW_HIT_CHANCE) {
-                                const damage = 45;
-                                target.takeDamage(damage, character.attack, character.name, allCharacters);
-                                character.damageDealt += damage;
-                                displayMessage(`${character.name}'s Quick Draw hit ${target.name} for ${damage} damage!`);
-                            } else {
-                                displayMessage(`${character.name}'s Quick Draw missed ${target.name}.`);
-                            }
-                            character.moveActive = false;
-                            character.moveEffect = null;
-                            break;
+                const target = character.moveEffect.target; // Get stored target
+                if (target && target.isAlive && !target.isPhasing && !target.isDummy) {
+                    const distToTarget = checkDistance({x: character.moveEffect.x, y: character.moveEffect.y, width: 0, height: 0}, target);
+                    if (distToTarget < target.width / 2 + 5 * CHARACTER_SCALE_FACTOR) { // Collision with target
+                         if (Math.random() < QUICKDRAW_HIT_CHANCE) {
+                            const damage = GALLONER_QUICKDRAW_DAMAGE;
+                            target.takeDamage(damage, character.attack, character.name, allCharacters);
+                            character.damageDealt += damage;
+                            displayMessage(`${character.name}'s Quick Draw hit ${target.name} for ${damage} damage!`);
+                        } else {
+                            displayMessage(`${character.name}'s Quick Draw missed ${target.name}.`);
                         }
+                        character.moveActive = false;
+                        character.moveEffect = null;
+                        return; // Exit after impact
                     }
                 }
 
@@ -370,7 +377,7 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
             break;
         case 'staticshock':
             character.moveEffect.radius += 3 * CHARACTER_SCALE_FACTOR;
-            if (character.moveEffect.radius > 80 * CHARACTER_SCALE_FACTOR) {
+            if (character.moveEffect.radius > STATICSHOCK_RADIUS * CHARACTER_SCALE_FACTOR) {
                 character.moveActive = false;
                 character.moveEffect = null;
             }
@@ -393,29 +400,120 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
             character.moveEffect.x += character.moveEffect.vx;
             character.moveEffect.y += character.moveEffect.vy;
             character.moveEffect.life--;
+
+            const shurikenTarget = character.moveEffect.target;
+            if (shurikenTarget && shurikenTarget.isAlive && !shurikenTarget.isPhasing && !shurikenTarget.isDummy) {
+                 const distToTarget = checkDistance({x: character.moveEffect.x, y: character.moveEffect.y, width: 0, height: 0}, shurikenTarget);
+                 if (distToTarget < shurikenTarget.width / 2 + 5 * CHARACTER_SCALE_FACTOR) { // Collision with target
+                    // Check for Magic Shield interception
+                    if (shurikenTarget.isBlockingShuriken) {
+                        displayMessage(`${shurikenTarget.name}'s Magic Shield intercepted ${character.name}'s Shuriken!`);
+                        character.moveActive = false;
+                        character.moveEffect = null;
+                        return;
+                    }
+                    const damage = SHURIKEN_DAMAGE;
+                    shurikenTarget.takeDamage(damage, character.attack, character.name, allCharacters);
+                    character.damageDealt += damage;
+                    character.moveActive = false;
+                    character.moveEffect = null;
+                    return; // Exit after impact
+                 }
+            }
+
             if (character.moveEffect.life <= 0) {
                 character.moveActive = false;
                 character.moveEffect = null;
             }
             break;
         case 'fireball':
-            character.moveEffect.radius += 5 * CHARACTER_SCALE_FACTOR;
-            character.moveEffect.alpha -= 0.02;
-            if (character.moveEffect.alpha <= 0) {
-                character.moveActive = false;
-                character.moveEffect = null;
+            if (character.moveEffect.type === 'fireball_projectile') {
+                character.moveEffect.x += character.moveEffect.vx;
+                character.moveEffect.y += character.moveEffect.vy;
+                character.moveEffect.life--;
+
+                let shouldExplode = false;
+                const fireballTarget = character.moveEffect.target;
+                if (fireballTarget && fireballTarget.isAlive && !fireballTarget.isPhasing && !fireballTarget.isDummy) {
+                    const distToTarget = checkDistance({x: character.moveEffect.x, y: character.moveEffect.y, width: 0, height: 0}, fireballTarget);
+                    if (distToTarget < fireballTarget.width / 2 + 5 * CHARACTER_SCALE_FACTOR) {
+                        shouldExplode = true;
+                    }
+                }
+
+                if (shouldExplode || character.moveEffect.life <= 0 ||
+                    character.moveEffect.x < 0 || character.moveEffect.x > canvas.width ||
+                    character.moveEffect.y < 0 || character.moveEffect.y > canvas.height) {
+
+                    character.moveEffect = {
+                        type: 'fireball_explosion',
+                        x: character.moveEffect.x,
+                        y: character.moveEffect.y,
+                        radius: 10 * CHARACTER_SCALE_FACTOR,
+                        maxRadius: WIZARD_FIREBALL_RADIUS * CHARACTER_SCALE_FACTOR,
+                        alpha: 1,
+                        duration: 30, // Explosion visual duration
+                        targetsHit: new Set() // Prevent hitting same target multiple times
+                    };
+                }
+            } else if (character.moveEffect.type === 'fireball_explosion') {
+                character.moveEffect.radius += (character.moveEffect.maxRadius - character.moveEffect.radius) * 0.2;
+                character.moveEffect.alpha -= 1 / character.moveEffect.duration; // Fade out
+
+                if (character.moveEffect.duration > 0) {
+                    allCharacters.forEach(target => {
+                        if (target !== character && target.isAlive && !target.isPhasing && !target.isDummy && !character.moveEffect.targetsHit.has(target.name)) {
+                            const dist = checkDistance(
+                                {x: character.moveEffect.x, y: character.moveEffect.y, width: character.moveEffect.radius * 2, height: character.moveEffect.radius * 2},
+                                target
+                            );
+                            if (dist < target.width / 2 + character.moveEffect.radius) {
+                                const damage = WIZARD_FIREBALL_DAMAGE;
+                                target.takeDamage(damage, character.attack, character.name, allCharacters);
+                                character.damageDealt += damage;
+                                displayMessage(`${target.name} burned by Fireball!`);
+                                character.moveEffect.targetsHit.add(target.name);
+                            }
+                        }
+                    });
+                }
+
+                character.moveEffect.duration--;
+                if (character.moveEffect.duration <= 0 || character.moveEffect.alpha <= 0) {
+                    character.moveActive = false;
+                    character.moveEffect = null;
+                }
             }
             break;
-        case 'charge':
+        case 'charge': // NEW: Impact damage on collision
             character.moveEffect.duration--;
+
+            if (character.moveEffect.duration > 0) {
+                allCharacters.forEach(target => {
+                    if (target !== character && target.isAlive && !target.isPhasing && !target.isDummy && !character.moveEffect.targetsHit.has(target.name)) {
+                        const dist = checkDistance(character, target);
+                        if (dist < character.width / 2 + target.width / 2) { // Direct collision during charge
+                            const damage = CHARGE_IMPACT_DAMAGE;
+                            target.takeDamage(damage, character.attack, character.name, allCharacters);
+                            character.damageDealt += damage;
+                            target.applyDebuff('charge_knockback', 0.5, 30, 'speed'); // Knockback effect
+                            target.dx = (target.x - character.x) > 0 ? 5 : -5; // Simple knockback direction
+                            target.dy = (target.y - character.y) > 0 ? 5 : -5; // Simple knockback direction
+                            character.moveEffect.targetsHit.add(target.name); // Mark target as hit
+                        }
+                    }
+                });
+            }
+
             if (character.moveEffect.duration <= 0) {
                 character.moveActive = false;
                 character.moveEffect = null;
-                character.speed = character.originalSpeed;
+                character.speed = character.originalSpeed; // Reset speed after charge
                 const newSpeedMagnitude = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
                 const currentAngle = Math.atan2(character.dy, character.dx);
                 character.dx = Math.cos(currentAngle) * newSpeedMagnitude;
                 character.dy = Math.sin(currentAngle) * newSpeedMagnitude;
+                displayMessage(`${character.name}'s Charge ended.`);
             }
             break;
         case 'boo':
@@ -423,6 +521,23 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
             // If there's more specific Boo logic for continuous effects, it should be added.
             if (character.moveEffect && character.moveEffect.type === 'boo_effect') {
                 character.moveEffect.duration--;
+
+                if (character.moveEffect.duration > 0) {
+                    allCharacters.forEach(target => {
+                        if (target !== character && target.isAlive && !target.isPhasing && !target.isDummy && !character.moveEffect.targetsAffected.has(target.name)) {
+                            const dist = checkDistance(character, target);
+                            if (dist < character.moveEffect.radius) {
+                                const damage = GHOST_BOO_DAMAGE;
+                                target.takeDamage(damage, character.attack, character.name, allCharacters);
+                                character.damageDealt += damage;
+                                target.applyDebuff('fear_slow', 0.6, 60, 'speed'); // Apply a temporary slow
+                                displayMessage(`${target.name} is feared by ${character.name}'s Boo!`);
+                                character.moveEffect.targetsAffected.add(target.name);
+                            }
+                        }
+                    });
+                }
+
                 if (character.moveEffect.duration <= 0) {
                     character.moveActive = false;
                     character.moveEffect = null;
@@ -558,26 +673,15 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                 // console.log(`Projectile Vel: (${character.moveEffect.vx.toFixed(2)}, ${character.moveEffect.vy.toFixed(2)})`);
 
                 let shouldExplode = false;
-                for (const target of allCharacters) {
-                    if (target !== character && target.isAlive && !target.isPhasing) {
-                        const dist = checkDistance(
-                            {x: character.moveEffect.x, y: character.moveEffect.y, width: character.moveEffect.radius * 2, height: character.moveEffect.radius * 2},
-                            target
-                        );
-
-                        // console.log(`  Target: ${target.name} (Alive: ${target.isAlive}, Phasing: ${target.isPhasing})`);
-                        // console.log(`  Target Pos: (${target.x.toFixed(0)}, ${target.y.toFixed(0)}) Size: ${target.width.toFixed(0)}`);
-                        // console.log(`  Distance to ${target.name}: ${dist.toFixed(0)}`);
-                        // console.log(`  Required Dist for Collision: ${(target.width / 2 + character.moveEffect.radius).toFixed(0)}`);
-
-
-                        if (dist < target.width / 2 + character.moveEffect.radius) {
-                            shouldExplode = true;
-                            console.warn(`!!! VOLATILE CONCOCTION IMPACT DETECTED on ${target.name} !!!`); // This should fire on impact
-                            break;
-                        }
+                const potionTarget = character.moveEffect.target;
+                if (potionTarget && potionTarget.isAlive && !potionTarget.isPhasing && !potionTarget.isDummy) {
+                    const distToTarget = checkDistance({x: character.moveEffect.x, y: character.moveEffect.y, width: character.moveEffect.radius * 2, height: character.moveEffect.radius * 2}, potionTarget);
+                    if (distToTarget < potionTarget.width / 2 + character.moveEffect.radius) {
+                        shouldExplode = true;
+                        // console.warn(`!!! VOLATILE CONCOCTION IMPACT DETECTED on ${potionTarget.name} !!!`); // This should fire on impact
                     }
                 }
+
 
                 // FIX: If shouldExplode is true, we force the explosion and ignore out-of-bounds.
                 // Otherwise, we check for out-of-bounds or life expiring.
@@ -585,13 +689,13 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                                     character.moveEffect.y < -character.moveEffect.radius || character.moveEffect.y > canvas.height + character.moveEffect.radius;
 
                 if (shouldExplode || character.moveEffect.life <= 0 || isOutOfBounds) {
-                    console.log(`Exploding: Life <= 0 (${character.moveEffect.life <= 0}) || Should Explode (${shouldExplode}) || Out of Bounds (${isOutOfBounds})`);
-                    
+                    // console.log(`Exploding: Life <= 0 (${character.moveEffect.life <= 0}) || Should Explode (${shouldExplode}) || Out of Bounds (${isOutOfBounds})`);
+
                     // Prioritize actual collision. If shouldExplode is true, the explosion location is confirmed at the projectile's current spot.
                     // If not shouldExplode, but it's out of bounds, we might want to clamp the position to the edge for the explosion.
                     // However, the original code already assigns projectile.x/y, so it will still be the potentially OOB point.
                     // For the Alchemist, the main thing is that if it hits, it explodes there.
-                    
+
                     character.moveEffect = {
                         type: 'volatile_explosion',
                         x: character.moveEffect.x, // Use projectile's x
@@ -604,7 +708,7 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                         color: character.moveEffect.color,
                         targetsHit: []
                     };
-                    console.log(`Explosion created at: (${character.moveEffect.x.toFixed(0)}, ${character.moveEffect.y.toFixed(0)})`);
+                    // console.log(`Explosion created at: (${character.moveEffect.x.toFixed(0)}, ${character.moveEffect.y.toFixed(0)})`);
                 }
             } else if (character.moveEffect.type === 'volatile_explosion') {
                 character.moveEffect.radius += (character.moveEffect.maxRadius - character.moveEffect.radius) * 0.2;
@@ -612,13 +716,13 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
 
                 if (character.moveEffect.duration > 0) {
                     allCharacters.forEach(target => {
-                        if (target !== character && target.isAlive && !target.isPhasing && !character.moveEffect.targetsHit.includes(target.name)) {
+                        if (target !== character && target.isAlive && !target.isPhasing && !target.isDummy && !character.moveEffect.targetsHit.includes(target.name)) {
                             const dist = checkDistance(
                                 {x: character.moveEffect.x, y: character.moveEffect.y, width: character.moveEffect.radius * 2, height: character.moveEffect.radius * 2},
                                 target
                             );
                             if (dist < target.width / 2 + character.moveEffect.radius) {
-                                console.log(`Applying ${character.moveEffect.effectType} to ${target.name} from explosion at (${character.moveEffect.x.toFixed(0)}, ${character.moveEffect.y.toFixed(0)})`); // New log
+                                // console.log(`Applying ${character.moveEffect.effectType} to ${target.name} from explosion at (${character.moveEffect.x.toFixed(0)}, ${character.moveEffect.y.toFixed(0)})`); // New log
                                 switch (character.moveEffect.effectType) {
                                     case 'damage':
                                         const damageAmount = VOLATILE_CONCOCTION_DAMAGE;
@@ -657,7 +761,7 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                 if (character.moveEffect.duration <= 0 || character.moveEffect.alpha <= 0) {
                     character.moveActive = false;
                     character.moveEffect = null;
-                    console.log("Explosion finished."); // New log
+                    // console.log("Explosion finished."); // New log
                 }
             }
             break;

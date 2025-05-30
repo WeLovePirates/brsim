@@ -354,6 +354,14 @@ export async function startGame(requestFullscreenOnStart) {
         char.spawnTime = gameStartTime; // Set spawnTime here for the current game
         char.deathTime = 0; // Explicitly reset deathTime for a fresh start
         char.isStunned = false;
+        char.buffs = {}; // NEW: Reset buffs
+        char.debuffs = {}; // NEW: Reset debuffs
+        char.isHealingOverTime = false; // NEW: Reset healing over time
+        char.healAmountPerTick = 0; // NEW: Reset healing over time
+        char.isBleeding = false; // NEW: Reset bleeding
+        char.bleedDamagePerTick = 0; // NEW: Reset bleeding
+        char.bleedTarget = null; // NEW: Reset bleeding
+        char.damageReduction = 0; // NEW: Reset damage reduction
 
         char.x = Math.random() * (canvas.width - char.width);
         char.y = Math.random() * (canvas.height - char.height);
@@ -414,6 +422,14 @@ export function resetGame() {
         char.spawnTime = 0; // Reset spawnTime for a clean restart
         char.deathTime = 0; // Reset deathTime for a clean restart
         char.isStunned = false;
+        char.buffs = {}; // NEW: Reset buffs
+        char.debuffs = {}; // NEW: Reset debuffs
+        char.isHealingOverTime = false; // NEW: Reset healing over time
+        char.healAmountPerTick = 0; // NEW: Reset healing over time
+        char.isBleeding = false; // NEW: Reset bleeding
+        char.bleedDamagePerTick = 0; // NEW: Reset bleeding
+        char.bleedTarget = null; // NEW: Reset bleeding
+        char.damageReduction = 0; // NEW: Reset damage reduction
 
         char.x = Math.random() * (canvas.width - char.width);
         char.y = Math.random() * (canvas.height - char.height);
