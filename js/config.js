@@ -57,6 +57,36 @@ export const ELIXIR_DEFENSE_BOOST_PERCENTAGE = 0.4; // 40% defense boost from El
 export const ELIXIR_HEAL_PER_TICK = 2; // Healing amount per tick from Elixir
 export const ELIXIR_HEAL_TICK_INTERVAL_MS = 500; // How often Elixir heals (0.5 seconds)
 
+// NEW: Clown Specific Constants (AoE Attack)
+export const CLOWN_CONFETTI_BLAST_RADIUS = 100; // Radius of Confetti Blast AoE
+export const CLOWN_CONFETTI_BLAST_DAMAGE = 15; // Damage of Confetti Blast
+
+// NEW: Hair Kid Static Shock Constants (AoE Attack)
+export const STATICSHOCK_RADIUS = 80; // Radius of Static Shock AoE
+export const STATICSHOCK_DAMAGE = 10; // Damage of Static Shock
+
+// NEW: Wizard Fireball Constants (AoE Attack)
+export const WIZARD_FIREBALL_RADIUS = 120; // Radius of Fireball AoE
+export const WIZARD_FIREBALL_DAMAGE = 35; // Damage of Fireball
+export const WIZARD_MAGIC_SHIELD_DURATION_FRAMES = 120; // Duration of Magic Shield in frames (2 seconds)
+export const WIZARD_MAGIC_SHIELD_DAMAGE_REDUCTION = 0.7; // 70% damage reduction for Magic Shield
+
+// NEW: Tank Charge Constants (Impact and Buff/Debuff)
+export const CHARGE_SPEED_BOOST = 2.5; // Multiplier for speed during Charge
+export const CHARGE_DURATION_FRAMES = 90; // Duration of Charge in frames (1.5 seconds)
+export const CHARGE_IMPACT_DAMAGE = 20; // Damage on impact during Charge
+export const TANK_FORTIFY_DEFENSE_BOOST = 2.0; // Multiplier for defense during Fortify
+export const TANK_FORTIFY_DAMAGE_REDUCTION = 0.3; // 30% damage reduction during Fortify
+
+// NEW: Galloner Quickdraw Damage
+export const GALLONER_QUICKDRAW_DAMAGE = 45; // Damage of Galloner's Quickdraw
+
+// NEW: Frenchie Baguette Bash Damage
+export const BAGUETTE_BASH_DAMAGE = 20; // Damage of Frenchie's Baguette Bash
+
+// NEW: Ninja Shuriken Damage
+export const SHURIKEN_DAMAGE = 25; // Damage of Ninja's Shuriken
+
 
 export const MAP_IMAGE_SOURCE = './sprites/map.png'; // New: Path to your map image
 
@@ -75,7 +105,7 @@ export const IMAGE_SOURCES = [
       secondaryAbility: 'smoke_bomb', secondaryAbilityCooldown: 9000 },
     { name: 'Wizard', url: './sprites/wizard.png', move: 'fireball', attack: 18, defense: 5, speed: 0.8,
       secondaryAbility: 'magic_shield', secondaryAbilityCooldown: 10000 },
-    { name: 'Tank', url: './sprites/tank.png', move: 'charge', attack: 13, defense: 15, speed: 0.7, // ATTACK BUMPED FROM 9 TO 13
+    { name: 'Tank', url: './sprites/tank.png', move: 'charge', attack: 13, defense: 15, speed: 0.7,
       secondaryAbility: 'fortify', secondaryAbilityCooldown: 20000 },
     { name: 'Ghost', url: './sprites/ghost.png', move: 'boo', attack: 15, defense: 3, speed: 1.8,
       secondaryAbility: 'invisibility', secondaryAbilityCooldown: 10000 },
@@ -84,5 +114,5 @@ export const IMAGE_SOURCES = [
     { name: 'Shark', url: './sprites/shark.png', move: 'feeding_frenzy', attack: 15, defense: 9, speed: 1.1,
       secondaryAbility: 'fin_slice', secondaryAbilityCooldown: 9000 },
     { name: 'Alchemist', url: './sprites/alchemist.png', move: 'volatile_concoction', attack: 9, defense: 1, speed: 1.0,
-      secondaryAbility: 'elixir_of_fortitude', secondaryAbilityCooldown: 8000 }, // NEW
+      secondaryAbility: 'elixir_of_fortitude', secondaryAbilityCooldown: 8000 },
 ];

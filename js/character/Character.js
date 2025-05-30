@@ -17,7 +17,10 @@ import {
     FEEDING_FRENZY_DURATION_FRAMES,
     FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE,
     ELIXIR_HEAL_PER_TICK,
-    ELIXIR_HEAL_TICK_INTERVAL_MS
+    ELIXIR_HEAL_TICK_INTERVAL_MS,
+    TANK_FORTIFY_DEFENSE_BOOST,
+    TANK_FORTIFY_DAMAGE_REDUCTION,
+    WIZARD_MAGIC_SHIELD_DURATION_FRAMES,
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -55,6 +58,7 @@ export class Character {
         this.originalSpeed = this.speed; // Store original speed for ability resets
         this.originalDefense = this.defense; // Store original defense for ability resets
         this.isBlockingShuriken = false; // Specific for Wizard's magic shield
+        this.damageReduction = 0; // NEW: For general damage reduction buffs
 
         this.isDodging = false;
         this.dodgeDirectionAngle = 0;
@@ -82,6 +86,11 @@ export class Character {
         this.lastHealTickTime = 0;
 
 
+        // NEW: Buff/Debuff tracking
+        this.buffs = {}; // { type: { duration: N, strength: X, originalStat: Y }, ... }
+        this.debuffs = {}; // { type: { duration: N, strength: X, originalStat: Y }, ... }
+
+
         this.kills = 0;
         this.damageDealt = 0;
         this.healingDone = 0;
@@ -95,6 +104,71 @@ export class Character {
         this.dy = (Math.random() - 0.5) * ORIGINAL_SPEED_MAGNITUDE * this.speed * scaleFactor;
         if (Math.abs(this.dx) < 1 * this.speed * scaleFactor) this.dx = (this.dx > 0 ? 1 : -1) * this.speed * scaleFactor;
         if (Math.abs(this.dy) < 1 * this.speed * scaleFactor) this.dy = (this.dy > 0 ? 1 : -1) * this.speed * scaleFactor;
+    }
+
+    /**
+     * Applies a buff to the character.
+     * @param {string} type - The type of buff (e.g., 'attack_boost', 'defense_boost').
+     * @param {number} strength - The multiplier or additive value of the buff.
+     * @param {number} durationFrames - The duration of the buff in frames.
+     * @param {string} stat - The stat affected by the buff (e.g., 'attack', 'defense', 'speed').
+     */
+    applyBuff(type, strength, durationFrames, stat) {
+        if (this.buffs[type]) {
+            // Refresh duration if buff already active
+            this.buffs[type].duration = durationFrames;
+            return;
+        }
+
+        let originalStatValue;
+        switch (stat) {
+            case 'attack': originalStatValue = this.attack; this.attack *= strength; break;
+            case 'defense': originalStatValue = this.defense; this.defense *= strength; break;
+            case 'speed': originalStatValue = this.speed; this.speed *= strength; break;
+            case 'damageReduction': originalStatValue = this.damageReduction; this.damageReduction = strength; break; // Special case for direct reduction
+            default: return; // Invalid stat
+        }
+
+        this.buffs[type] = {
+            duration: durationFrames,
+            strength: strength,
+            originalStat: originalStatValue,
+            stat: stat,
+            startTime: Date.now()
+        };
+        displayMessage(`${this.name} gained ${type.replace(/_/g, ' ')}!`);
+    }
+
+    /**
+     * Applies a debuff to the character.
+     * @param {string} type - The type of debuff (e.g., 'speed_slow', 'defense_reduce').
+     * @param {number} strength - The multiplier or additive value of the debuff.
+     * @param {number} durationFrames - The duration of the debuff in frames.
+     * @param {string} stat - The stat affected by the debuff (e.g., 'attack', 'defense', 'speed').
+     */
+    applyDebuff(type, strength, durationFrames, stat) {
+        if (this.debuffs[type]) {
+            // Refresh duration if debuff already active
+            this.debuffs[type].duration = durationFrames;
+            return;
+        }
+
+        let originalStatValue;
+        switch (stat) {
+            case 'attack': originalStatValue = this.attack; this.attack *= strength; break;
+            case 'defense': originalStatValue = this.defense; this.defense *= strength; break;
+            case 'speed': originalStatValue = this.speed; this.speed *= strength; break;
+            default: return; // Invalid stat
+        }
+
+        this.debuffs[type] = {
+            duration: durationFrames,
+            strength: strength,
+            originalStat: originalStatValue,
+            stat: stat,
+            startTime: Date.now()
+        };
+        displayMessage(`${this.name} was afflicted with ${type.replace(/_/g, ' ')}!`);
     }
 
     /**
@@ -116,11 +190,14 @@ export class Character {
     takeDamage(rawDamage, attackerAttack, attackerName, allCharacters) {
         if (!this.isAlive) return;
 
-        // Check for invulnerability (e.g., from Wizard's magic shield)
+        // Check for invulnerability (e.g., from Wizard's magic shield) or damage reduction
         if (this.isBlockingShuriken && rawDamage === 25) { // Assuming 25 is shuriken damage
             displayMessage(`${this.name}'s Magic Shield blocked the Shuriken!`);
             return;
         }
+        // NEW: Apply general damage reduction
+        rawDamage *= (1 - this.damageReduction);
+
 
         let damageToTake = rawDamage;
 
@@ -166,6 +243,34 @@ export class Character {
      */
     update(characters, CHARACTER_SCALE_FACTOR) {
         if (!this.isAlive) return;
+
+        // NEW: Update and expire buffs/debuffs
+        for (const type in this.buffs) {
+            this.buffs[type].duration--;
+            if (this.buffs[type].duration <= 0) {
+                switch (this.buffs[type].stat) {
+                    case 'attack': this.attack = this.buffs[type].originalStat; break;
+                    case 'defense': this.defense = this.buffs[type].originalStat; break;
+                    case 'speed': this.speed = this.buffs[type].originalStat; break;
+                    case 'damageReduction': this.damageReduction = 0; break;
+                }
+                displayMessage(`${this.name}'s ${type.replace(/_/g, ' ')} wore off.`);
+                delete this.buffs[type];
+            }
+        }
+        for (const type in this.debuffs) {
+            this.debuffs[type].duration--;
+            if (this.debuffs[type].duration <= 0) {
+                switch (this.debuffs[type].stat) {
+                    case 'attack': this.attack = this.debuffs[type].originalStat; break;
+                    case 'defense': this.defense = this.debuffs[type].originalStat; break;
+                    case 'speed': this.speed = this.debuffs[type].originalStat; break;
+                }
+                displayMessage(`${this.name}'s ${type.replace(/_/g, ' ')} wore off.`);
+                delete this.debuffs[type];
+            }
+        }
+
 
         // Apply bleed damage if bleeding
         if (this.isBleeding && Date.now() - this.lastBleedTickTime > 1000) { // Damage every 1 second
@@ -213,19 +318,55 @@ export class Character {
 
         const currentTime = Date.now();
         const aliveCharacters = characters.filter(char => char.isAlive);
-        const allLowHealth = aliveCharacters.every(char => char.health <= char.maxHealth * LOW_HEALTH_THRESHOLD);
 
+        // NEW: AI Target Prioritization
+        // Prioritize: lowest health, then lowest defense, then closest
         let nearestOpponent = null;
         let minDistance = Infinity;
+        let lowestHealth = Infinity;
+        let lowestDefense = Infinity;
+
         aliveCharacters.forEach(otherChar => {
-            if (otherChar !== this) {
+            if (otherChar !== this && otherChar.isAlive && !otherChar.isPhasing && !otherChar.isDummy) {
                 const dist = checkDistance(this, otherChar);
-                if (dist < minDistance) {
-                    minDistance = dist;
+
+                // Priority 1: Lowest Health (and not already defeated)
+                if (otherChar.health < lowestHealth) {
+                    lowestHealth = otherChar.health;
                     nearestOpponent = otherChar;
+                    minDistance = dist;
+                } else if (otherChar.health === lowestHealth) {
+                    // Priority 2: If health is tied, target lowest defense
+                    if (otherChar.defense < lowestDefense) {
+                        lowestDefense = otherChar.defense;
+                        nearestOpponent = otherChar;
+                        minDistance = dist;
+                    } else if (otherChar.defense === lowestDefense) {
+                        // Priority 3: If defense is tied, target closest
+                        if (dist < minDistance) {
+                            minDistance = dist;
+                            nearestOpponent = otherChar;
+                        }
+                    }
                 }
             }
         });
+
+        // If there's no specific opponent based on health/defense, just pick the closest alive.
+        if (!nearestOpponent && aliveCharacters.length > 1) {
+             aliveCharacters.forEach(otherChar => {
+                if (otherChar !== this && otherChar.isAlive && !otherChar.isPhasing && !otherChar.isDummy) {
+                    const dist = checkDistance(this, otherChar);
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        nearestOpponent = otherChar;
+                    }
+                }
+            });
+        }
+
+
+        const allLowHealth = aliveCharacters.every(char => char.health <= char.maxHealth * LOW_HEALTH_THRESHOLD);
 
         let appliedMovement = false;
 
@@ -313,16 +454,38 @@ export class Character {
             }
         }
 
-        // Special move activation
-        if (Date.now() - this.lastMoveTime > MOVE_COOLDOWN) {
-            if (Math.random() < 0.02) { // Chance to activate special move
+        // NEW: AI Ability Combo Logic
+        // Decide whether to use secondary ability or special move
+        const shouldUseSecondary = Date.now() - this.lastSecondaryAbilityTime > this.secondaryAbilityCooldown && Math.random() < 0.1; // Small chance to use secondary
+        const shouldUseMove = Date.now() - this.lastMoveTime > MOVE_COOLDOWN && Math.random() < 0.02; // Small chance to use special move
+
+        if (nearestOpponent) {
+            // Example Combo: Stun + High Damage (Queen Bee, Alchemist can stun)
+            if ((this.secondaryAbilityType === 'honeycomb' || this.moveType === 'volatile_concoction') &&
+                shouldUseSecondary && checkDistance(this, nearestOpponent) < this.width * 5 && !nearestOpponent.isStunned) { // Within range and target not stunned
+                handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas); // Use stun ability
+                // Potentially, if the stun lands, queue up a special move immediately after.
+                // This would require a more complex AI state machine or a very short "wait" after stun.
+                // For simplicity here, just triggering stun.
+                displayMessage(`${this.name} attempts a combo setup!`);
+            }
+            // Example Combo: Damage Reduction/Defense Buff + Charge (Tank)
+            else if (this.secondaryAbilityType === 'fortify' && this.moveType === 'charge' &&
+                shouldUseSecondary && this.health < this.maxHealth * 0.7 && !this.buffs['fortify_defense_boost']) { // Use fortify if health is not full and not already fortified
+                handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas); // Use fortify
+            }
+            // General condition for using abilities:
+            else if (shouldUseSecondary) {
+                handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas); // Pass canvas here
+            } else if (shouldUseMove) {
                  handleSpecialMove(this, characters, CHARACTER_SCALE_FACTOR);
             }
-        }
-
-        // Secondary ability activation
-        if (Date.now() - this.lastSecondaryAbilityTime > this.secondaryAbilityCooldown) {
-            handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas); // Pass canvas here
+        } else { // If no nearest opponent, still consider using self-buffs or random moves
+            if (shouldUseSecondary) {
+                handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas); // Pass canvas here
+            } else if (shouldUseMove) {
+                 handleSpecialMove(this, characters, CHARACTER_SCALE_FACTOR);
+            }
         }
 
         // Update active move effects (ability effects are updated at start of `update`)
@@ -381,6 +544,15 @@ export class Character {
             this.ctx.lineWidth = 1;
         }
 
+        // NEW: Draw Fortify indicator (Tank)
+        if (this.buffs['fortify_defense_boost']) {
+            this.ctx.strokeStyle = 'saddlebrown';
+            this.ctx.lineWidth = 4 * CHARACTER_SCALE_FACTOR;
+            this.ctx.beginPath();
+            this.ctx.rect(this.x - 2, this.y - 2, this.width + 4, this.height + 4); // Slightly larger border
+            this.ctx.stroke();
+            this.ctx.lineWidth = 1;
+        }
 
         // Reset alpha for drawing UI elements like health bar and name
         this.ctx.globalAlpha = this.originalAlpha;
@@ -459,10 +631,20 @@ export class Character {
                 this.ctx.arc(this.moveEffect.x, this.moveEffect.y, 8 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
                 this.ctx.fill();
             } else if (this.moveType === 'fireball') {
-                this.ctx.fillStyle = `rgba(255, 100, 0, ${this.moveEffect.alpha})`;
-                this.ctx.beginPath();
-                this.ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.moveEffect.radius, 0, Math.PI * 2);
-                this.ctx.fill();
+                if (this.moveEffect.type === 'fireball_projectile') {
+                    this.ctx.fillStyle = `rgba(255, 100, 0, ${this.moveEffect.alpha})`;
+                    this.ctx.beginPath();
+                    this.ctx.arc(this.moveEffect.x, this.moveEffect.y, this.moveEffect.radius, 0, Math.PI * 2);
+                    this.ctx.fill();
+                } else if (this.moveEffect.type === 'fireball_explosion') {
+                    this.ctx.save();
+                    this.ctx.globalAlpha = this.moveEffect.alpha;
+                    this.ctx.fillStyle = 'rgba(255, 100, 0, 0.7)';
+                    this.ctx.beginPath();
+                    this.ctx.arc(this.moveEffect.x, this.moveEffect.y, this.moveEffect.radius, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.restore();
+                }
             } else if (this.moveType === 'charge') {
                 this.ctx.strokeStyle = 'blue';
                 this.ctx.lineWidth = 3 * CHARACTER_SCALE_FACTOR;
@@ -614,7 +796,8 @@ export class Character {
                 this.ctx.fill();
                 this.ctx.restore();
             } else if (this.secondaryAbilityEffect.type === 'magic_shield') {
-                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
+                // NEW: Visual for Magic Shield to clearly indicate active status
+                currentAlpha = (this.secondaryAbilityEffect.duration / WIZARD_MAGIC_SHIELD_DURATION_FRAMES);
                 this.ctx.save();
                 this.ctx.globalAlpha = currentAlpha * 0.6;
                 this.ctx.strokeStyle = 'lightblue';
