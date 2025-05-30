@@ -5,7 +5,7 @@ export const REFERENCE_GAME_WIDTH = 1200;
 export const ORIGINAL_CHARACTER_SIZE = 40;
 export const ORIGINAL_SPEED_MAGNITUDE = 1.5;
 export const INITIAL_HEALTH = 96;
-export const BASE_COLLISION_DAMAGE = 15; // MODIFIED: Increased base collision damage to 15
+export const BASE_COLLISION_DAMAGE = 15;
 export const HIT_COOLDOWN = 500;
 export const MOVE_COOLDOWN = 2000;
 export const MEDIC_PATCH_COOLDOWN = 7000;
@@ -57,8 +57,23 @@ export const ELIXIR_DEFENSE_BOOST_PERCENTAGE = 0.4; // 40% defense boost from El
 export const ELIXIR_HEAL_PER_TICK = 2; // Healing amount per tick from Elixir
 export const ELIXIR_HEAL_TICK_INTERVAL_MS = 500; // How often Elixir heals (0.5 seconds)
 
+// Megalodon Boss (NEW)
+export const MEGALODON_HEALTH_MULTIPLIER = 8; // Much more health than normal characters
+export const MEGALODON_ATTACK_MULTIPLIER = 2; // Stronger attack
+export const MEGALODON_DEFENSE_MULTIPLIER = 1.5; // More defense
+export const MEGALODON_SPEED_MULTIPLIER = 0.6; // Slower than normal characters
+export const MEGALODON_SIZE_MULTIPLIER = 2.5; // Significantly larger
+export const MEGALODON_FEEDING_FRENZY_BONUS_DAMAGE = 0.5; // Increased bonus damage for Feeding Frenzy
+export const MEGALODON_FIN_SLICE_BLEED_DAMAGE_MULTIPLIER = 2; // Stronger bleed
+
 
 export const MAP_IMAGE_SOURCE = './sprites/map.png'; // New: Path to your map image
+
+// Boss Mode specific flag
+export const IS_BOSS_MODE = {
+    ENABLED: false, // This will be dynamically set by matchCreationState
+    MAX_PLAYER_CHARACTERS: 7 // Max non-boss characters in boss mode
+};
 
 export const IMAGE_SOURCES = [
     { name: 'Clown', url: './sprites/clown.png', move: 'confetti', attack: 8, defense: 8, speed: 1.2,
@@ -75,7 +90,7 @@ export const IMAGE_SOURCES = [
       secondaryAbility: 'smoke_bomb', secondaryAbilityCooldown: 9000 },
     { name: 'Wizard', url: './sprites/wizard.png', move: 'fireball', attack: 18, defense: 5, speed: 0.8,
       secondaryAbility: 'magic_shield', secondaryAbilityCooldown: 10000 },
-    { name: 'Tank', url: './sprites/tank.png', move: 'charge', attack: 13, defense: 15, speed: 0.7, // ATTACK BUMPED FROM 9 TO 13
+    { name: 'Tank', url: './sprites/tank.png', move: 'charge', attack: 13, defense: 15, speed: 0.7,
       secondaryAbility: 'fortify', secondaryAbilityCooldown: 20000 },
     { name: 'Ghost', url: './sprites/ghost.png', move: 'boo', attack: 15, defense: 3, speed: 1.8,
       secondaryAbility: 'invisibility', secondaryAbilityCooldown: 10000 },
@@ -84,5 +99,10 @@ export const IMAGE_SOURCES = [
     { name: 'Shark', url: './sprites/shark.png', move: 'feeding_frenzy', attack: 15, defense: 9, speed: 1.1,
       secondaryAbility: 'fin_slice', secondaryAbilityCooldown: 9000 },
     { name: 'Alchemist', url: './sprites/alchemist.png', move: 'volatile_concoction', attack: 9, defense: 1, speed: 1.0,
-      secondaryAbility: 'elixir_of_fortitude', secondaryAbilityCooldown: 8000 }, // NEW
+      secondaryAbility: 'elixir_of_fortitude', secondaryAbilityCooldown: 8000 },
+    { name: 'Megalodon', url: './sprites/megalodon.png', move: 'feeding_frenzy', attack: 15 * MEGALODON_ATTACK_MULTIPLIER, defense: 9 * MEGALODON_DEFENSE_MULTIPLIER, speed: 1.1 * MEGALODON_SPEED_MULTIPLIER,
+      health: INITIAL_HEALTH * MEGALODON_HEALTH_MULTIPLIER, secondaryAbility: 'fin_slice', secondaryAbilityCooldown: 7000,
+      isDummy: true, // Revert to true, only selectable in Boss Mode.
+      scaleFactorOverride: MEGALODON_SIZE_MULTIPLIER // Custom scale for Megalodon
+    }
 ];

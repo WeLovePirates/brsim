@@ -17,7 +17,8 @@ import {
     FEEDING_FRENZY_DURATION_FRAMES,
     FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE,
     ELIXIR_HEAL_PER_TICK,
-    ELIXIR_HEAL_TICK_INTERVAL_MS
+    ELIXIR_HEAL_TICK_INTERVAL_MS,
+    MEGALODON_FEEDING_FRENZY_BONUS_DAMAGE // NEW
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -25,7 +26,7 @@ import { handleSpecialMove, updateMoveEffect } from './characterMoves.js';
 import { handleSecondaryAbility, updateAbilityEffect } from './characterAbilities.js';
 
 export class Character {
-    constructor(name, image, moveType, attack, defense, speed, scaleFactor, initialHealthOverride = INITIAL_HEALTH, secondaryAbilityType, secondaryAbilityCooldown, canvas) {
+    constructor(name, image, moveType, attack, defense, speed, scaleFactor, initialHealthOverride = INITIAL_HEALTH, secondaryAbilityType, secondaryAbilityCooldown, canvas, scaleFactorOverride = 1) { // MODIFIED: Added scaleFactorOverride
         this.name = name;
         this.image = image;
         this.moveType = moveType;
@@ -36,8 +37,8 @@ export class Character {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
 
-        this.width = ORIGINAL_CHARACTER_SIZE * scaleFactor;
-        this.height = ORIGINAL_CHARACTER_SIZE * scaleFactor;
+        this.width = ORIGINAL_CHARACTER_SIZE * scaleFactor * scaleFactorOverride; // MODIFIED: Apply scaleFactorOverride here
+        this.height = ORIGINAL_CHARACTER_SIZE * scaleFactor * scaleFactorOverride; // MODIFIED: Apply scaleFactorOverride here
         this.health = initialHealthOverride;
         this.maxHealth = initialHealthOverride;
         this.isAlive = true;
@@ -128,7 +129,12 @@ export class Character {
         const attacker = allCharacters.find(char => char.name === attackerName);
         if (attacker && attacker.moveActive && attacker.moveEffect && attacker.moveEffect.type === 'feeding_frenzy') {
             if (this.health <= this.maxHealth * LOW_HEALTH_THRESHOLD) {
-                damageToTake += damageToTake * FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE;
+                // MODIFIED: Apply Megalodon-specific bonus damage if attacker is Megalodon
+                if (attacker.name === 'Megalodon') {
+                    damageToTake += damageToTake * MEGALODON_FEEDING_FRENZY_BONUS_DAMAGE;
+                } else {
+                    damageToTake += damageToTake * FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE;
+                }
                 // displayMessage(`${attacker.name}'s Feeding Frenzy dealt bonus damage to ${this.name}!`); // Log bonus damage
             }
         }
@@ -315,14 +321,28 @@ export class Character {
 
         // Special move activation
         if (Date.now() - this.lastMoveTime > MOVE_COOLDOWN) {
-            if (Math.random() < 0.02) { // Chance to activate special move
+            // Megalodon will always use its special move if target is within a certain distance
+            if (this.name === 'Megalodon') {
+                const megalodonMoveActivationRange = this.width * 2; // Megalodon activates move if target is within 2x its size
+                if (nearestOpponent && checkDistance(this, nearestOpponent) < megalodonMoveActivationRange) {
+                    handleSpecialMove(this, characters, CHARACTER_SCALE_FACTOR);
+                }
+            } else if (Math.random() < 0.02) { // Chance to activate special move for other characters
                  handleSpecialMove(this, characters, CHARACTER_SCALE_FACTOR);
             }
         }
 
         // Secondary ability activation
         if (Date.now() - this.lastSecondaryAbilityTime > this.secondaryAbilityCooldown) {
-            handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas); // Pass canvas here
+            // Megalodon will always use its secondary ability if target is within a certain distance
+            if (this.name === 'Megalodon') {
+                const megalodonAbilityActivationRange = this.width * 1.5; // Megalodon activates ability if target is within 1.5x its size
+                if (nearestOpponent && checkDistance(this, nearestOpponent) < megalodonAbilityActivationRange) {
+                    handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas);
+                }
+            } else {
+                handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas); // Pass canvas here
+            }
         }
 
         // Update active move effects (ability effects are updated at start of `update`)

@@ -34,7 +34,7 @@ export async function initGame() {
             // Fallback image for map in case of load error
             mapImage.src = `https://placehold.co/${canvas.width}x${canvas.height}/000000/FFFFFF?text=MAP+LOAD+ERROR`; // Sets fallback map image source
             mapImage.onload = resolve; // Resolves promise on fallback map load
-            mapImage.onerror = reject; // Rejects promise on fallback map load failure
+            mapImage.onerror = () => reject(new Error(`Critical: Fallback image failed for map.`)); // Rejects promise on fallback map load failure
         };
     });
 
@@ -52,7 +52,8 @@ export async function initGame() {
                 health: src.health,
                 secondaryAbility: src.secondaryAbility,
                 secondaryAbilityCooldown: src.secondaryAbilityCooldown,
-                isDummy: src.isDummy || false
+                isDummy: src.isDummy || false,
+                scaleFactorOverride: src.scaleFactorOverride || 1 // MODIFIED: Pass scaleFactorOverride
             }); // Resolves promise on character load
             img.onerror = () => {
                 console.error(`Failed to load image: ${src.url}`); // Logs error on character load failure
@@ -68,7 +69,8 @@ export async function initGame() {
                     health: src.health,
                     secondaryAbility: src.secondaryAbility,
                     secondaryAbilityCooldown: src.secondaryAbilityCooldown,
-                    isDummy: src.isDummy || false
+                    isDummy: src.isDummy || false,
+                    scaleFactorOverride: src.scaleFactorOverride || 1 // MODIFIED: Pass scaleFactorOverride
                 }); // Resolves promise on fallback character load
                 img.onerror = () => reject(new Error(`Critical: Fallback image failed for ${src.name}`)); // Rejects promise on fallback character load failure
             };
@@ -78,7 +80,7 @@ export async function initGame() {
     setGameLoopDependencies(canvas, ctx, characters, mapImage); // Sets game loop dependencies
 
     // Initialize match creation with all available characters
-    matchCreationState.setAvailableCharacters(loadedImages); // Initializes available characters in match creation state
+    matchCreationState.setAllAvailableCharacters(loadedImages); // MODIFIED: Renamed function to setAllAvailableCharacters
 
     // Show the main menu initially
     showMainMenu(); // Shows main menu

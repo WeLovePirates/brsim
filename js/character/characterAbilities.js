@@ -11,7 +11,8 @@ import {
     FIN_SLICE_BLEED_DAMAGE_PER_TICK, // Import new constant
     ELIXIR_DEFENSE_BOOST_PERCENTAGE, // NEW: For Alchemist
     ELIXIR_HEAL_PER_TICK, // NEW: For Alchemist
-    ELIXIR_HEAL_TICK_INTERVAL_MS // NEW: For Alchemist
+    ELIXIR_HEAL_TICK_INTERVAL_MS, // NEW: For Alchemist
+    MEGALODON_FIN_SLICE_BLEED_DAMAGE_MULTIPLIER // NEW
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -240,8 +241,14 @@ export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FA
                         target.takeDamage(damage, character.attack, character.name, allCharacters);
                         character.damageDealt += damage;
 
+                        // MODIFIED: Megalodon's Fin Slice deals more bleed damage
+                        let bleedDamage = FIN_SLICE_BLEED_DAMAGE_PER_TICK + character.attack * 0.1;
+                        if (character.name === 'Megalodon') {
+                            bleedDamage *= MEGALODON_FIN_SLICE_BLEED_DAMAGE_MULTIPLIER;
+                        }
+
                         target.isBleeding = true;
-                        target.bleedDamagePerTick = FIN_SLICE_BLEED_DAMAGE_PER_TICK + character.attack * 0.1;
+                        target.bleedDamagePerTick = bleedDamage; // Use potentially modified bleedDamage
                         target.lastBleedTickTime = Date.now();
                         target.bleedTarget = character.name;
                         setTimeout(() => {

@@ -1,30 +1,40 @@
 // js/game/matchCreation.js
 
-import { CHARACTER_SCALE_FACTOR, drawButton } from '../ui/uiUpdates.js'; // Imports remain
-import { setCharacters } from './gameInit.js'; // Imports remain
-import { startGame, showMainMenu } from './gameLoop.js'; // Imports remain
+import { CHARACTER_SCALE_FACTOR, drawButton } from '../ui/uiUpdates.js';
+import { setCharacters } from './gameInit.js';
+import { startGame, showMainMenu } from './gameLoop.js';
+import { IS_BOSS_MODE } from '../config.js'; // MODIFIED: Import IS_BOSS_MODE
 
 // State for the match creation menu
 export const matchCreationState = {
-    availableCharactersData: [], // Stores the raw data (name, image, stats etc.) from config.js
+    allAvailableCharactersData: [], // Stores ALL raw data from config.js
+    availableCharactersForMode: [], // Filtered list based on current game mode
     selectedCharacters: new Set(), // Stores names of selected characters
     characterDisplayBoxes: [], // Stores bounding boxes for drawing/clicking character options
+    currentMode: null, // 'simulator' or 'boss'
     buttons: {
         startGame: { text: 'Start Battle', x: 0, y: 0, width: 250, height: 50, action: 'startGame' },
-        back: { text: 'Back to Menu', x: 0, y: 0, width: 250, height: 50, action: 'backToMenu' }
-    }, // Buttons configuration
-    // This method will be called by gameInit to set the initial character data
-    setAvailableCharacters: function(data) {
-        this.availableCharactersData = data.filter(char => !char.isDummy); // Exclude dummies from selection
-        // Pre-load images for selected characters, if they aren't already
-        this.availableCharactersData.forEach(charData => {
-            if (!charData.image.complete) {
-                charData.image.src = charData.url; // Ensure image source is set if not already loaded
-            }
-        });
+        back: { text: 'Back to Main Menu', x: 0, y: 0, width: 250, height: 50, action: 'backToMenu' }
+    },
+    setAllAvailableCharacters: function(data) { // MODIFIED: Renamed function
+        this.allAvailableCharactersData = data;
+        this.filterCharactersForMode(); // Initial filter when data is set
+    },
+    setGameMode: function(mode) { // NEW: Set the current game mode
+        this.currentMode = mode;
+        IS_BOSS_MODE.ENABLED = (mode === 'boss'); // Update global flag
+        this.filterCharactersForMode(); // Re-filter characters based on new mode
+        this.selectedCharacters.clear(); // Clear selections when mode changes
+    },
+    filterCharactersForMode: function() { // NEW: Filters characters based on current mode
+        if (this.currentMode === 'boss') {
+            this.availableCharactersForMode = this.allAvailableCharactersData; // All characters available for boss mode selection
+        } else { // Simulator mode
+            this.availableCharactersForMode = this.allAvailableCharactersData.filter(char => !char.isDummy); // Dummies (bosses) excluded
+        }
     },
     getSelectedCharactersData: function() { // Gets selected characters data
-        return this.availableCharactersData.filter(charData => this.selectedCharacters.has(charData.name));
+        return this.allAvailableCharactersData.filter(charData => this.selectedCharacters.has(charData.name));
     }
 };
 
@@ -73,79 +83,119 @@ export function drawMatchCreationMenu(ctx, canvas, scaleFactor) {
 
     matchCreationState.characterDisplayBoxes = []; // Reset for current frame
 
-    matchCreationState.availableCharactersData.forEach((charData, index) => {
-        const boxX = currentX; // Sets box X position
-        const boxY = currentY; // Sets box Y position
+    matchCreationState.availableCharactersForMode.forEach((charData, index) => { // MODIFIED: Use availableCharactersForMode
+        const boxX = currentX;
+        const boxY = currentY;
 
         // Store box dimensions for click detection
         matchCreationState.characterDisplayBoxes.push({
             name: charData.name,
+            isDummy: charData.isDummy, // NEW: Store isDummy for click logic
             x: boxX,
             y: boxY,
             width: charBoxSize,
             height: charBoxSize
-        }); // Pushes box dimensions for click detection
+        });
+
+        const isSelected = matchCreationState.selectedCharacters.has(charData.name);
+        let fillColor = '#333';
+        let borderColor = '#4a5568';
+
+        if (isSelected) {
+            fillColor = '#22c55e'; // Green if selected
+        } else if (matchCreationState.currentMode === 'boss' && charData.isDummy) {
+            // If in boss mode, and this is a boss, make it a distinct color if not selected
+            fillColor = '#8B0000'; // Dark red for unselected boss
+        } else if (matchCreationState.currentMode === 'boss' && !charData.isDummy && matchCreationState.selectedCharacters.has('Megalodon') && matchCreationState.selectedCharacters.size >= IS_BOSS_MODE.MAX_PLAYER_CHARACTERS + 1) {
+            // If in boss mode, boss is selected, and max players are selected, make other players dim
+            fillColor = '#555';
+            borderColor = '#333';
+        } else if (matchCreationState.currentMode === 'simulator' && matchCreationState.selectedCharacters.size >= matchCreationState.availableCharactersForMode.length) {
+             // If in simulator mode and all players are selected, make other players dim
+            fillColor = '#555';
+            borderColor = '#333';
+        }
+
 
         // Draw character background box
-        ctx.fillStyle = matchCreationState.selectedCharacters.has(charData.name) ? '#22c55e' : '#333'; // Green if selected
-        ctx.fillRect(boxX, boxY, charBoxSize, charBoxSize); // Draws character background box
+        ctx.fillStyle = fillColor;
+        ctx.fillRect(boxX, boxY, charBoxSize, charBoxSize);
 
-        ctx.strokeStyle = '#4a5568'; // Sets stroke style
-        ctx.lineWidth = 2 * scaleFactor; // Sets line width
-        ctx.strokeRect(boxX, boxY, charBoxSize, charBoxSize); // Draws rectangle
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 2 * scaleFactor;
+        ctx.strokeRect(boxX, boxY, charBoxSize, charBoxSize);
 
         // Draw character image
         if (charData.image && charData.image.complete && charData.image.naturalWidth > 0) {
-            const imgWidth = charBoxSize * 0.8; // Scale image to fit box
-            const imgHeight = charBoxSize * 0.8; // Scale image to fit box
-            const imgX = boxX + (charBoxSize - imgWidth) / 2; // Calculates image X position
-            const imgY = boxY + (charBoxSize - imgHeight) / 2; // Calculates image Y position
-            ctx.drawImage(charData.image, imgX, imgY, imgWidth, imgHeight); // Draws character image
+            // Apply scaleFactorOverride here for drawing in the menu
+            const displayScale = charData.scaleFactorOverride || 1;
+            const imgWidth = charBoxSize * 0.8 * (displayScale > 1.0 ? 1.0 : displayScale); // Limit display scale in menu
+            const imgHeight = charBoxSize * 0.8 * (displayScale > 1.0 ? 1.0 : displayScale); // Limit display scale in menu
+            const imgX = boxX + (charBoxSize - imgWidth) / 2;
+            const imgY = boxY + (charBoxSize - imgHeight) / 2;
+            ctx.drawImage(charData.image, imgX, imgY, imgWidth, imgHeight);
         } else {
             // Fallback for missing image
-            ctx.fillStyle = '#ff0000'; // Sets fallback fill style
-            ctx.fillText('N/A', boxX + charBoxSize / 2, boxY + charBoxSize / 2); // Draws fallback text
+            ctx.fillStyle = '#ff0000';
+            ctx.fillText('N/A', boxX + charBoxSize / 2, boxY + charBoxSize / 2);
         }
 
         // Draw character name
-        ctx.font = `${12 * scaleFactor}px 'Inter', sans-serif`; // Sets font for name
-        ctx.fillStyle = '#e2e8f0'; // Sets fill style for name
-        ctx.textAlign = 'center'; // Sets text alignment for name
-        ctx.textBaseline = 'bottom'; // Sets text baseline for name
-        ctx.fillText(charData.name, boxX + charBoxSize / 2, boxY + charBoxSize - (5 * scaleFactor)); // Draws character name
+        ctx.font = `${12 * scaleFactor}px 'Inter', sans-serif`;
+        ctx.fillStyle = '#e2e8f0';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(charData.name, boxX + charBoxSize / 2, boxY + charBoxSize - (5 * scaleFactor));
 
-        currentX += charBoxSize + charPadding; // Increments current X position
+        currentX += charBoxSize + charPadding;
         if ((index + 1) % charsPerRow === 0) {
-            currentX = startX; // Resets current X position
-            currentY += charBoxSize + charPadding; // Increments current Y position
+            currentX = startX;
+            currentY += charBoxSize + charPadding;
         }
     });
 
-    // Display selected count
-    const selectedCountY = currentY + charBoxSize + (20 * scaleFactor); // Position above buttons
-    ctx.font = `${18 * scaleFactor}px 'Inter', sans-serif`; // Sets font for selected count
-    ctx.fillStyle = '#FFFFFF'; // Sets fill style for selected count
-    ctx.textAlign = 'center'; // Sets text alignment for selected count
-    ctx.textBaseline = 'middle'; // Sets text baseline for selected count
-    ctx.fillText(`Selected: ${matchCreationState.selectedCharacters.size} / ${matchCreationState.availableCharactersData.length}`, canvas.width / 2, selectedCountY); // Draws selected count
+    // Display selected count and mode-specific messages
+    const selectedCountY = currentY + charBoxSize + (20 * scaleFactor);
+    ctx.font = `${18 * scaleFactor}px 'Inter', sans-serif`;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    let displayMessageText = '';
+    if (matchCreationState.currentMode === 'boss') {
+        const selectedBosses = matchCreationState.getSelectedCharactersData().filter(char => char.isDummy);
+        const selectedPlayers = matchCreationState.getSelectedCharactersData().filter(char => !char.isDummy);
+
+        if (selectedBosses.length > 1) {
+            displayMessageText = "Only ONE boss allowed!";
+            ctx.fillStyle = 'red';
+        } else if (selectedBosses.length === 0) {
+            displayMessageText = "Select 1 Boss and up to 7 Heroes.";
+        } else {
+            displayMessageText = `Selected: ${selectedPlayers.length} / ${IS_BOSS_MODE.MAX_PLAYER_CHARACTERS} Heroes + 1 Boss`;
+        }
+    } else { // Simulator Mode
+        displayMessageText = `Selected: ${matchCreationState.selectedCharacters.size} / ${matchCreationState.availableCharactersForMode.length}`;
+    }
+    ctx.fillText(displayMessageText, canvas.width / 2, selectedCountY);
 
 
     // Draw buttons
-    const buttonWidth = matchCreationState.buttons.startGame.width * scaleFactor; // Calculates button width
-    const buttonHeight = matchCreationState.buttons.startGame.height * scaleFactor; // Calculates button height
-    const buttonSpacing = 20 * scaleFactor; // Space between buttons
+    const buttonWidth = matchCreationState.buttons.startGame.width * scaleFactor;
+    const buttonHeight = matchCreationState.buttons.startGame.height * scaleFactor;
+    const buttonSpacing = 20 * scaleFactor;
 
     // Start Battle button
-    const startButton = matchCreationState.buttons.startGame; // Gets start button
-    startButton.x = canvas.width / 2 - (buttonWidth / 2); // Sets start button X position
-    startButton.y = selectedCountY + (30 * scaleFactor); // Position below selected count
-    drawButton(ctx, startButton, scaleFactor); // Draws start button
+    const startButton = matchCreationState.buttons.startGame;
+    startButton.x = canvas.width / 2 - (buttonWidth / 2);
+    startButton.y = selectedCountY + (30 * scaleFactor);
+    drawButton(ctx, startButton, scaleFactor);
 
     // Back to Menu button
-    const backButton = matchCreationState.buttons.back; // Gets back button
-    backButton.x = canvas.width / 2 - (buttonWidth / 2); // Sets back button X position
-    backButton.y = startButton.y + buttonHeight + buttonSpacing; // Sets back button Y position
-    drawButton(ctx, backButton, scaleFactor); // Draws back button
+    const backButton = matchCreationState.buttons.back;
+    backButton.x = canvas.width / 2 - (buttonWidth / 2);
+    backButton.y = startButton.y + buttonHeight + buttonSpacing;
+    drawButton(ctx, backButton, scaleFactor);
 }
 
 /**
@@ -161,10 +211,33 @@ export async function handleMatchCreationClick(clickX, clickY, canvas, scaleFact
     for (const box of matchCreationState.characterDisplayBoxes) {
         if (clickX >= box.x && clickX <= box.x + box.width &&
             clickY >= box.y && clickY <= box.y + box.height) {
+
+            const charData = matchCreationState.allAvailableCharactersData.find(c => c.name === box.name);
+            const isBoss = charData.isDummy;
+
             if (matchCreationState.selectedCharacters.has(box.name)) {
-                matchCreationState.selectedCharacters.delete(box.name); // Deselects character
+                matchCreationState.selectedCharacters.delete(box.name);
             } else {
-                matchCreationState.selectedCharacters.add(box.name); // Selects character
+                if (matchCreationState.currentMode === 'boss') {
+                    const selectedBosses = matchCreationState.getSelectedCharactersData().filter(char => char.isDummy);
+                    const selectedPlayers = matchCreationState.getSelectedCharactersData().filter(char => !char.isDummy);
+
+                    if (isBoss) {
+                        if (selectedBosses.length === 0) {
+                            matchCreationState.selectedCharacters.add(box.name);
+                        } else {
+                            displayMessage("Only one boss can be selected in Boss Mode!");
+                        }
+                    } else { // It's a regular player character
+                        if (selectedPlayers.length < IS_BOSS_MODE.MAX_PLAYER_CHARACTERS) {
+                            matchCreationState.selectedCharacters.add(box.name);
+                        } else {
+                            displayMessage(`Maximum ${IS_BOSS_MODE.MAX_PLAYER_CHARACTERS} hero classes can be selected for Boss Mode!`);
+                        }
+                    }
+                } else { // Simulator Mode
+                    matchCreationState.selectedCharacters.add(box.name);
+                }
             }
             return null; // Handled a character selection
         }
@@ -173,17 +246,32 @@ export async function handleMatchCreationClick(clickX, clickY, canvas, scaleFact
     // Check button clicks
     for (const key in matchCreationState.buttons) {
         const button = matchCreationState.buttons[key];
-        const scaledWidth = button.width * scaleFactor; // Calculates scaled button width
-        const scaledHeight = button.height * scaleFactor; // Calculates scaled button height
+        const scaledWidth = button.width * scaleFactor;
+        const scaledHeight = button.height * scaleFactor;
         // Buttons' x and y are updated in drawMatchCreationMenu, so use them directly.
         if (clickX >= button.x && clickX <= button.x + scaledWidth &&
             clickY >= button.y && clickY <= button.y + scaledHeight) {
             if (button.action === 'startGame') {
-                if (matchCreationState.selectedCharacters.size > 0) {
-                    return 'startGame'; // Returns 'startGame' if characters are selected
-                } else {
-                    console.warn("Please select at least one character to start the battle!"); // Warns if no characters are selected
-                    return null; // Do not start if no characters are selected
+                if (matchCreationState.currentMode === 'boss') {
+                    const selectedBosses = matchCreationState.getSelectedCharactersData().filter(char => char.isDummy);
+                    const selectedPlayers = matchCreationState.getSelectedCharactersData().filter(char => !char.isDummy);
+                    if (selectedBosses.length === 1 && selectedPlayers.length > 0 && selectedPlayers.length <= IS_BOSS_MODE.MAX_PLAYER_CHARACTERS) {
+                        return 'startGame';
+                    } else {
+                        if (selectedBosses.length !== 1) {
+                            displayMessage("Boss Mode requires exactly one boss selected.");
+                        } else {
+                            displayMessage(`Boss Mode requires 1 to ${IS_BOSS_MODE.MAX_PLAYER_CHARACTERS} hero classes.`);
+                        }
+                        return null;
+                    }
+                } else { // Simulator Mode
+                    if (matchCreationState.selectedCharacters.size > 0) {
+                        return 'startGame'; // Returns 'startGame' if characters are selected
+                    } else {
+                        displayMessage("Please select at least one character to start the battle!");
+                        return null; // Do not start if no characters are selected
+                    }
                 }
             }
             return button.action; // Returns button action

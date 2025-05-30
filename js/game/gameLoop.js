@@ -1,6 +1,6 @@
 // js/game/gameLoop.js
 
-import { PROB_UPDATE_INTERVAL, ORIGINAL_SPEED_MAGNITUDE } from '../config.js';
+import { PROB_UPDATE_INTERVAL, ORIGINAL_SPEED_MAGNITUDE, IS_BOSS_MODE } from '../config.js'; // MODIFIED: Import IS_BOSS_MODE
 import { displayMessage } from '../utils/displayUtils.js';
 import {
     updateCanvasSize,
@@ -25,7 +25,7 @@ let lastProbUpdateTime = 0;
 let mapImage;
 let ctx;
 let canvas;
-let currentScreen = 'menu'; // 'menu', 'matchCreation', 'game', 'summary'
+let currentScreen = 'menu'; // 'menu', 'gameModeSelection', 'matchCreation', 'game', 'summary' // MODIFIED: Added 'gameModeSelection'
 let cachedProbabilities = [];
 
 // --- Fixed Timestep Variables ---
@@ -35,8 +35,15 @@ let deltaTime = 0; // Accumulator for how much time has passed since the last ga
 
 // Variables for in-canvas buttons
 const menuButtons = {
-    start: { text: 'Start Game', x: 0, y: 0, width: 300, height: 60, action: 'showMatchCreation' },
+    start: { text: 'Start Game', x: 0, y: 0, width: 300, height: 60, action: 'showGameModeSelection' }, // MODIFIED: Action changed to showGameModeSelection
     fullscreenToggle: { text: 'Toggle Fullscreen (F)', x: 0, y: 0, width: 300, height: 60, action: 'toggleFullscreen' }
+};
+
+// New buttons for Game Mode Selection
+const gameModeButtons = {
+    simulatorMode: { text: 'Simulator Mode', x: 0, y: 0, width: 300, height: 60, action: 'startSimulatorMode' },
+    bossMode: { text: 'Boss Mode', x: 0, y: 0, width: 300, height: 60, action: 'startBossMode' },
+    backToMenu: { text: 'Back to Main Menu', x: 0, y: 0, width: 300, height: 60, action: 'showMainMenu' }
 };
 
 // Define the "Play Again" button for the summary screen here
@@ -120,20 +127,37 @@ function handleCanvasClick(event) {
     if (currentScreen === 'menu') {
         for (const key in menuButtons) {
             const button = menuButtons[key];
-            // Use currentX/Y/Width/Height which are set by drawButton
             if (clickX >= button.currentX && clickX <= button.currentX + button.currentWidth &&
                 clickY >= button.currentY && clickY <= button.currentY + button.currentHeight) {
-                if (button.action === 'showMatchCreation') {
-                    showMatchCreationMenu();
-                    currentScreen = 'matchCreation';
+                if (button.action === 'showGameModeSelection') { // MODIFIED: New action
+                    showGameModeSelection();
                 } else if (button.action === 'toggleFullscreen') {
                     toggleFullscreen();
                 }
                 return;
             }
         }
-    } else if (currentScreen === 'matchCreation') {
-        // handleMatchCreationClick is now an async function, so await its result
+    } else if (currentScreen === 'gameModeSelection') { // NEW: Game Mode Selection handling
+        for (const key in gameModeButtons) {
+            const button = gameModeButtons[key];
+            if (clickX >= button.currentX && clickX <= button.currentX + button.currentWidth &&
+                clickY >= button.currentY && clickY <= button.currentY + button.currentHeight) {
+                if (button.action === 'startSimulatorMode') {
+                    matchCreationState.setGameMode('simulator'); // Set mode
+                    showMatchCreationMenu(); // Go to character selection
+                    currentScreen = 'matchCreation';
+                } else if (button.action === 'startBossMode') {
+                    matchCreationState.setGameMode('boss'); // Set mode
+                    showMatchCreationMenu(); // Go to character selection
+                    currentScreen = 'matchCreation';
+                } else if (button.action === 'showMainMenu') {
+                    showMainMenu();
+                }
+                return;
+            }
+        }
+    }
+    else if (currentScreen === 'matchCreation') {
         handleMatchCreationClick(clickX, clickY, canvas, CHARACTER_SCALE_FACTOR).then(result => {
             if (result === 'startGame') {
                 startGame(true);
@@ -143,16 +167,10 @@ function handleCanvasClick(event) {
         });
         return;
     } else if (currentScreen === 'summary') {
-        // The play again button listener is now set up directly in uiUpdates.js
-        // via addSummaryEventListeners, which uses the handlePlayAgainClick function.
-        // So, this block here is no longer needed for the playAgainButton itself.
-        // It's still here from your original code, but the logic has moved.
-        // This 'if' block will only execute if an area OTHER than the button is clicked within the summary context.
+        // This block is for redundancy if the dedicated event listener isn't active for some reason.
+        // The primary handling for playAgainButton is in uiUpdates.js
         if (clickX >= playAgainButton.currentX && clickX <= playAgainButton.currentX + playAgainButton.currentWidth &&
             clickY >= playAgainButton.currentY && clickY >= playAgainButton.currentY + playAgainButton.currentHeight) {
-            // This specific check can be removed since the listener is added to the button itself
-            // However, keeping it doesn't break anything. The actual action is now handled by the listener setup.
-            // resetGame(); // This will be called by the dedicated button listener now.
             return;
         }
     }
@@ -202,6 +220,38 @@ function drawMainMenu() {
 }
 
 /**
+ * NEW: Displays the game mode selection menu.
+ */
+function drawGameModeSelectionMenu() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.font = `${36 * CHARACTER_SCALE_FACTOR}px 'Press Start 2P'`;
+    ctx.fillStyle = '#FFD700';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Select Game Mode', canvas.width / 2, canvas.height / 2 - 120 * CHARACTER_SCALE_FACTOR);
+
+    const buttonWidth = gameModeButtons.simulatorMode.width * CHARACTER_SCALE_FACTOR;
+    const buttonHeight = gameModeButtons.simulatorMode.height * CHARACTER_SCALE_FACTOR;
+    const buttonSpacing = 20 * CHARACTER_SCALE_FACTOR;
+
+    gameModeButtons.simulatorMode.x = (canvas.width / 2) - (buttonWidth / 2);
+    gameModeButtons.simulatorMode.y = canvas.height / 2 - buttonHeight - buttonSpacing;
+
+    gameModeButtons.bossMode.x = (canvas.width / 2) - (buttonWidth / 2);
+    gameModeButtons.bossMode.y = canvas.height / 2;
+
+    gameModeButtons.backToMenu.x = (canvas.width / 2) - (buttonWidth / 2);
+    gameModeButtons.backToMenu.y = canvas.height / 2 + buttonHeight + buttonSpacing;
+
+    drawButton(ctx, gameModeButtons.simulatorMode, CHARACTER_SCALE_FACTOR);
+    drawButton(ctx, gameModeButtons.bossMode, CHARACTER_SCALE_FACTOR);
+    drawButton(ctx, gameModeButtons.backToMenu, CHARACTER_SCALE_FACTOR);
+}
+
+
+/**
  * Updates the game logic by one timestep.
  * This function should be called repeatedly at a fixed interval.
  */
@@ -222,17 +272,40 @@ function updateGameLogic() {
     handleCollisions(characters);
 
     const aliveCharacters = characters.filter(char => char.isAlive);
-    if (aliveCharacters.length <= 1 && gameRunning) {
-        gameRunning = false;
-        gameEndTime = performance.now(); // Keep gameEndTime for overall duration
-        currentScreen = 'summary';
 
-        addSummaryEventListeners(canvas);
+    // MODIFIED: Win condition check considering Boss Mode
+    if (gameRunning) {
+        if (matchCreationState.isBossMode) {
+            const bossAlive = aliveCharacters.some(char => char.name === 'Megalodon');
+            const playersAlive = aliveCharacters.some(char => char.name !== 'Megalodon');
 
-        if (aliveCharacters.length === 1) {
-            displayMessage(`${aliveCharacters[0].name} wins the battle!`);
-        } else {
-            displayMessage("It's a draw! No one survived.");
+            if (!bossAlive) { // Boss defeated
+                gameRunning = false;
+                gameEndTime = performance.now();
+                currentScreen = 'summary';
+                addSummaryEventListeners(canvas);
+                displayMessage("The Megalodon has been defeated! Victory!");
+            } else if (!playersAlive) { // All players defeated, boss wins
+                gameRunning = false;
+                gameEndTime = performance.now();
+                currentScreen = 'summary';
+                addSummaryEventListeners(canvas);
+                displayMessage("All heroes have fallen! The Megalodon reigns supreme!");
+            }
+        } else { // Simulator Mode (original behavior)
+            if (aliveCharacters.length <= 1) {
+                gameRunning = false;
+                gameEndTime = performance.now();
+                currentScreen = 'summary';
+
+                addSummaryEventListeners(canvas);
+
+                if (aliveCharacters.length === 1) {
+                    displayMessage(`${aliveCharacters[0].name} wins the battle!`);
+                } else {
+                    displayMessage("It's a draw! No one survived.");
+                }
+            }
         }
     }
 }
@@ -271,7 +344,10 @@ export function gameLoop(timestamp) {
 
     if (currentScreen === 'menu') {
         drawMainMenu();
-    } else if (currentScreen === 'matchCreation') {
+    } else if (currentScreen === 'gameModeSelection') { // NEW: Draw game mode selection
+        drawGameModeSelectionMenu();
+    }
+    else if (currentScreen === 'matchCreation') {
         drawMatchCreationMenu(ctx, canvas, CHARACTER_SCALE_FACTOR);
     } else if (currentScreen === 'game') {
         characters = getCharacters();
@@ -293,6 +369,14 @@ export function showMainMenu() {
     gameRunning = false;
     removeSummaryEventListeners(canvas); // Ensure summary listeners are removed
     displayMessage("Game assets loaded. Click 'Start Game' to begin!");
+}
+
+/**
+ * NEW: Shows the game mode selection menu.
+ */
+export function showGameModeSelection() {
+    currentScreen = 'gameModeSelection';
+    displayMessage("Choose your battle mode!");
 }
 
 
@@ -322,7 +406,8 @@ export async function startGame(requestFullscreenOnStart) {
         data.health,
         data.secondaryAbility,
         data.secondaryAbilityCooldown,
-        canvas
+        canvas,
+        data.scaleFactorOverride // Pass scaleFactorOverride
     ));
     setCharacters(newCharacters);
 
