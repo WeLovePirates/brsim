@@ -12,7 +12,10 @@ import {
     VOLATILE_CONCOCTION_DAMAGE,
     VOLATILE_CONCOCTION_HEAL,
     VOLATILE_CONCOCTION_STUN_DURATION_FRAMES,
-    IS_BOSS_MODE // Keep IS_BOSS_MODE import
+    FEEDING_FRENZY_DURATION_FRAMES,
+    FEEDING_FRENZY_ATTACK_SPEED_BOOST,
+    ORIGINAL_SPEED_MAGNITUDE, // ADDED: Import ORIGINAL_SPEED_MAGNITUDE
+    IS_BOSS_MODE
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -91,10 +94,10 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
                 strength: 5, // how many particles
                 spread: 30 // how far they spread
             };
-            for (let i = 0; i < character.moveEffect.strength; i++) {
+            for (let i = 0; i < 50; i++) {
                 character.moveEffect.particles.push({
-                    x: character.x + character.width / 2,
-                    y: character.y + character.height / 2,
+                    x: character.x + Math.random() * character.width,
+                    y: character.y + Math.random() * character.height,
                     dx: (Math.random() - 0.5) * character.moveEffect.spread,
                     dy: (Math.random() - 0.5) * character.moveEffect.spread,
                     color: `hsl(${Math.random() * 360}, 100%, 50%)`,
@@ -234,7 +237,7 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
             }
             break;
         case 'feeding_frenzy':
-            displayMessage(`${character.name} enters a Feeding Frenzy!`);
+            displayMessage(`${character.name} entered a Feeding Frenzy!`);
             character.moveEffect = {
                 type: 'feeding_frenzy',
                 duration: FEEDING_FRENZY_DURATION_FRAMES, // frames
@@ -248,7 +251,7 @@ export function handleSpecialMove(character, allCharacters, CHARACTER_SCALE_FACT
             character.speed *= character.moveEffect.speedBoost;
             // Update character's actual movement speed based on new speed
             const currentAngleFrenzy = Math.atan2(character.dy, character.dx);
-            const newSpeedMagnitudeFrenzy = character.speed * CHARACTER_SCALE_FACTOR;
+            const newSpeedMagnitudeFrenzy = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR; // Used ORIGINAL_SPEED_MAGNITUDE here
             character.dx = Math.cos(currentAngleFrenzy) * newSpeedMagnitudeFrenzy;
             character.dy = Math.sin(currentAngleFrenzy) * newSpeedMagnitudeFrenzy;
             break;
@@ -354,7 +357,7 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                         const damage = 50 + character.attack * 1.0;
                         target.takeDamage(damage, character.attack, character.name, allCharacters);
                         character.damageDealt += damage;
-                        displayMessage(`${character.name}'s Quick Draw HIT ${target.name}!`);
+                        displayMessage(`${character.name}'s Quick Draw HIT ${target.name} for ${damage} damage!`);
                         projectile.hasHit = true; // Mark as hit
                     }
                 }
@@ -434,8 +437,9 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                 if (target.isAlive && isValidTarget && !target.isPhasing && !character.moveEffect.targetsHit.includes(target.name)) {
                     const dist = checkDistance(character, target);
                     if (dist < character.width / 2 + target.width / 2) { // Collision detection
-                        target.takeDamage(character.moveEffect.damageOnHit, character.attack, character.name, allCharacters);
-                        character.damageDealt += character.moveEffect.damageOnHit;
+                        const damage = 30 + character.attack * 0.7;
+                        target.takeDamage(damage, character.attack, character.name, allCharacters);
+                        character.damageDealt += damage;
                         displayMessage(`${character.name} charged into ${target.name}!`);
                         character.moveEffect.targetsHit.push(target.name);
                     }
@@ -497,28 +501,41 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
             });
         }
     } else if (character.moveEffect.type === 'feeding_frenzy') {
-        // No direct damage from this move effect.
+        // The attack and speed boosts are applied in handleSpecialMove and persist for the duration.
+        // No direct damage from this move effect itself here.
+        // The damage modification is in Character.js -> takeDamage
     } else if (character.moveEffect.type === 'volatile_projectile') {
         const projectile = character.moveEffect;
         projectile.x += projectile.dx;
         projectile.y += projectile.dy;
 
         // Check for collision with ANY valid target or end of duration to trigger explosion
-        let hitTarget = false;
-        allCharacters.forEach(target => {
-            // Determine if this target is valid based on game mode and caster
-            // The explosion will handle the specific effects (damage/heal/stun) based on isValidTarget
-            const isValidTargetForExplosion = IS_BOSS_MODE.ENABLED ? (character.isBoss !== target.isBoss) : (target !== character);
+        let shouldExplode = false; // DECLARED: shouldExplode is now defined
+        for (const target of allCharacters) { // Using a for...of loop for potentially earlier exit
+            let isValidTargetForExplosion = false;
+            if (IS_BOSS_MODE.ENABLED) {
+                isValidTargetForExplosion = (character.isBoss !== target.isBoss);
+            } else {
+                isValidTargetForExplosion = (target !== character);
+            }
 
             if (target.isAlive && isValidTargetForExplosion && !target.isPhasing) {
-                const dist = checkDistance({ x: projectile.x, y: projectile.y, width: 0, height: 0 }, target);
+                const dist = checkDistance(
+                    {x: projectile.x, y: projectile.y, width: projectile.radius * 2, height: projectile.radius * 2},
+                    target
+                );
+
                 if (dist < target.width / 2 + projectile.radius) {
-                    hitTarget = true;
+                    shouldExplode = true;
+                    break; // Exit loop early if a target is hit
                 }
             }
-        });
+        }
 
-        if (projectile.duration <= 0 || hitTarget) {
+        let isOutOfBounds = projectile.x < -projectile.radius || projectile.x > canvas.width + projectile.radius ||
+                            projectile.y < -projectile.radius || projectile.y > canvas.height + projectile.radius;
+
+        if (shouldExplode || projectile.duration <= 0 || isOutOfBounds) {
             // Explosion logic
             character.moveEffect = {
                 type: 'volatile_explosion',
@@ -528,7 +545,7 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                 maxRadius: projectile.explosionRadius,
                 duration: 15,
                 alpha: 1,
-                potionType: projectile.potionType,
+                effectType: projectile.potionType,
                 color: projectile.color,
                 targetsHit: new Set()
             };
@@ -539,30 +556,39 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
                 // Determine if this target is valid based on game mode and caster
                 const isValidTargetForEffect = IS_BOSS_MODE.ENABLED ? (character.isBoss !== target.isBoss) : (target !== character);
 
-                if (target.isAlive && isValidTargetForEffect && !target.isPhasing) {
-                    const dist = checkDistance({ x: projectile.x, y: projectile.y, width: 0, height: 0 }, target);
-                    if (dist < projectile.explosionRadius && !character.moveEffect.targetsHit.has(target.name)) {
-                        if (projectile.potionType === 'damage') {
-                            target.takeDamage(VOLATILE_CONCOCTION_DAMAGE, character.attack, character.name, allCharacters);
-                            character.damageDealt += VOLATILE_CONCOCTION_DAMAGE;
-                        } else if (projectile.potionType === 'heal') {
-                            target.heal(VOLATILE_CONCOCTION_HEAL);
-                            character.healingDone += VOLATILE_CONCOCTION_HEAL;
-                        } else if (projectile.potionType === 'stun') {
-                            if (!target.isStunned) {
-                                target.isStunned = true;
-                                target.originalSpeedWhenStunned = target.speed;
-                                target.speed = 0;
-                                target.dx = 0;
-                                target.dy = 0;
-                                target.secondaryAbilityActive = true;
-                                target.secondaryAbilityEffect = {
-                                    type: 'volatile_concoction_stun',
-                                    duration: VOLATILE_CONCOCTION_STUN_DURATION_FRAMES
-                                };
-                                target.lastSecondaryAbilityTime = Date.now();
-                                displayMessage(`${target.name} is stunned!`);
-                            }
+                if (target.isAlive && isValidTargetForEffect && !target.isPhasing && !character.moveEffect.targetsHit.has(target.name)) {
+                    const dist = checkDistance(
+                        {x: projectile.x, y: projectile.y, width: 0, height: 0}, // Use explosion center for distance calc
+                        target
+                    );
+                    if (dist < projectile.explosionRadius && !character.moveEffect.targetsHit.has(target.name)) { // Check distance again for explosion AoE
+                        switch (character.moveEffect.effectType) {
+                            case 'damage':
+                                const damageAmount = VOLATILE_CONCOCTION_DAMAGE;
+                                target.takeDamage(damageAmount, character.attack, character.name, allCharacters);
+                                character.damageDealt += damageAmount;
+                                break;
+                            case 'heal':
+                                const healAmount = VOLATILE_CONCOCTION_HEAL;
+                                target.heal(healAmount);
+                                character.healingDone += healAmount;
+                                break;
+                            case 'stun':
+                                if (!target.isStunned) {
+                                    target.isStunned = true;
+                                    target.originalSpeedWhenStunned = target.speed;
+                                    target.speed = 0;
+                                    target.dx = 0;
+                                    target.dy = 0;
+                                    target.secondaryAbilityActive = true;
+                                    target.secondaryAbilityEffect = {
+                                        type: 'volatile_concoction_stun',
+                                        duration: VOLATILE_CONCOCTION_STUN_DURATION_FRAMES
+                                    };
+                                    target.lastSecondaryAbilityTime = Date.now();
+                                    displayMessage(`${target.name} is stunned!`);
+                                }
+                                break;
                         }
                         character.moveEffect.targetsHit.add(target.name);
                     }
@@ -571,8 +597,8 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
         }
     } else if (character.moveEffect.type === 'volatile_explosion') {
         const explosion = character.moveEffect;
-        explosion.radius = explosion.maxRadius * (1 - (explosion.duration / 15));
-        explosion.alpha = explosion.duration / 15;
+        explosion.radius += (explosion.maxRadius - explosion.radius) * 0.2; // Expand radius
+        explosion.alpha -= 1 / explosion.duration; // Fade out
     }
 
 
@@ -581,16 +607,17 @@ export function updateMoveEffect(character, allCharacters, CHARACTER_SCALE_FACTO
         if (character.moveEffect.type === 'charge') {
             character.speed = character.moveEffect.originalSpeed;
             const currentAngle = Math.atan2(character.dy, character.dx);
-            const newSpeedMagnitude = character.speed * CHARACTER_SCALE_FACTOR;
+            const newSpeedMagnitude = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
             character.dx = Math.cos(currentAngle) * newSpeedMagnitude;
             character.dy = Math.sin(currentAngle) * newSpeedMagnitude;
         } else if (character.moveEffect.type === 'feeding_frenzy') {
             character.attack = character.moveEffect.originalAttack;
             character.speed = character.moveEffect.originalSpeed;
             const currentAngle = Math.atan2(character.dy, character.dx);
-            const newSpeedMagnitude = character.speed * CHARACTER_SCALE_FACTOR;
+            const newSpeedMagnitude = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
             character.dx = Math.cos(currentAngle) * newSpeedMagnitude;
             character.dy = Math.sin(currentAngle) * newSpeedMagnitude;
+            displayMessage(`${character.name}'s Feeding Frenzy ended.`);
         } else if (character.moveEffect.type === 'shuriken' || character.moveEffect.type === 'fireball' || character.moveEffect.type === 'quickdraw_projectile') {
             // Projectiles disappear after duration, regardless of hit
         }

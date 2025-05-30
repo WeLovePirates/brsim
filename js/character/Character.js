@@ -5,7 +5,7 @@ import {
     ORIGINAL_CHARACTER_SIZE,
     ORIGINAL_SPEED_MAGNITUDE,
     HIT_COOLDOWN,
-    MOVE_COOLDOWN,
+    MOVE_COOLDOWN, // General move cooldown
     LOW_HEALTH_THRESHOLD,
     DODGE_CHANCE,
     DODGE_SPEED_MULTIPLIER,
@@ -20,7 +20,8 @@ import {
     ELIXIR_HEAL_TICK_INTERVAL_MS,
     MEGALODON_FEEDING_FRENZY_BONUS_DAMAGE,
     MEGALODON_TITLE_COLOR,
-    IS_BOSS_MODE // Keep IS_BOSS_MODE import
+    MEGALODON_MOVE_COOLDOWN, // IMPORTED: Megalodon's specific move cooldown
+    IS_BOSS_MODE
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -117,7 +118,7 @@ export class Character {
         if (!this.isAlive) return;
 
         // Check for invulnerability (e.g., from Wizard's magic shield)
-        if (this.isBlockingShuriken && rawDamage === 25) { // Assuming 25 is shuriken damage
+        if (this.isBlockingShuriken && rawDamage === 25) {
             displayMessage(`${this.name}'s Magic Shield blocked the Shuriken!`);
             return;
         }
@@ -128,7 +129,8 @@ export class Character {
         const attacker = allCharacters.find(char => char.name === attackerName);
         if (attacker && attacker.moveActive && attacker.moveEffect && attacker.moveEffect.type === 'feeding_frenzy') {
             if (this.health <= this.maxHealth * LOW_HEALTH_THRESHOLD) {
-                if (attacker.name === 'Megalodon') {
+                // Apply Megalodon-specific bonus damage if attacker is Megalodon
+                if (attacker.isBoss) {
                     damageToTake += damageToTake * MEGALODON_FEEDING_FRENZY_BONUS_DAMAGE;
                 } else {
                     damageToTake += damageToTake * FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE;
@@ -194,7 +196,7 @@ export class Character {
             }
         }
 
-        // Apply healing over time if active
+        // Apply healing over time if active (for Alchemist's Elixir of Fortitude)
         if (this.isHealingOverTime && Date.now() - this.lastHealTickTime > ELIXIR_HEAL_TICK_INTERVAL_MS) {
             const healAmount = this.healAmountPerTick;
             this.heal(healAmount);
@@ -202,6 +204,9 @@ export class Character {
             displayMessage(`${this.name} healed for ${healAmount.toFixed(0)} from Elixir! Health: ${this.health.toFixed(0)}`);
         }
 
+
+        // Call updateAbilityEffect for this character BEFORE checking isStunned for movement,
+        // so that the stun duration can expire in this frame.
         updateAbilityEffect(this, characters, CHARACTER_SCALE_FACTOR, this.canvas);
 
         if (this.isStunned) {
@@ -212,15 +217,14 @@ export class Character {
         const currentTime = Date.now();
         const aliveCharacters = characters.filter(char => char.isAlive);
 
-        // Determine the target for abilities/moves, but NOT necessarily for direct movement.
-        // This is who the character *wants* to attack.
+        // Determine the target for abilities/moves. This is who the character *wants* to attack.
         let targetForAttack = null;
         let minDistanceForAttack = Infinity;
 
         if (IS_BOSS_MODE.ENABLED) {
             if (this.isBoss) { // Boss targets players
                 aliveCharacters.forEach(otherChar => {
-                    if (otherChar !== this && !otherChar.isBoss) {
+                    if (otherChar !== this && !otherChar.isBoss && otherChar.isAlive) {
                         const dist = checkDistance(this, otherChar);
                         if (dist < minDistanceForAttack) {
                             minDistanceForAttack = dist;
@@ -230,7 +234,7 @@ export class Character {
                 });
             } else { // Player targets boss
                 aliveCharacters.forEach(otherChar => {
-                    if (otherChar.isBoss) {
+                    if (otherChar.isBoss && otherChar.isAlive) {
                         const dist = checkDistance(this, otherChar);
                         if (dist < minDistanceForAttack) {
                             minDistanceForAttack = dist;
@@ -241,7 +245,7 @@ export class Character {
             }
         } else { // Simulator Mode - target any other character
             aliveCharacters.forEach(otherChar => {
-                if (otherChar !== this) {
+                if (otherChar !== this && otherChar.isAlive) {
                     const dist = checkDistance(this, otherChar);
                     if (dist < minDistanceForAttack) {
                         minDistanceForAttack = dist;
@@ -306,7 +310,7 @@ export class Character {
                     }
                 }
             }
-        } // End if !this.isPhasing
+        }
 
 
         this.x += this.dx;
@@ -333,35 +337,35 @@ export class Character {
         }
 
         // Special move activation (uses targetForAttack)
-        if (Date.now() - this.lastMoveTime > MOVE_COOLDOWN) {
-            if (this.name === 'Megalodon') { // Specific to Megalodon
+        if (Date.now() - this.lastMoveTime > (this.isBoss ? MEGALODON_MOVE_COOLDOWN : MOVE_COOLDOWN)) { // Use specific cooldown for boss
+            if (this.name === 'Megalodon') {
                 const megalodonMoveActivationRange = this.width * 2;
                 if (targetForAttack && checkDistance(this, targetForAttack) < megalodonMoveActivationRange) {
                     handleSpecialMove(this, characters, CHARACTER_SCALE_FACTOR);
                 }
-            } else if (IS_BOSS_MODE.ENABLED) { // Player characters in boss mode focus moves on boss
-                if (targetForAttack && Math.random() < 0.05) { // Higher chance for players to use moves on boss
+            } else if (IS_BOSS_MODE.ENABLED) {
+                if (targetForAttack && Math.random() < 0.05) {
                      handleSpecialMove(this, characters, CHARACTER_SCALE_FACTOR);
                 }
             }
-            else if (Math.random() < 0.02) { // Original chance for simulator mode
+            else if (Math.random() < 0.02) {
                  handleSpecialMove(this, characters, CHARACTER_SCALE_FACTOR);
             }
         }
 
         // Secondary ability activation (uses targetForAttack)
         if (Date.now() - this.lastSecondaryAbilityTime > this.secondaryAbilityCooldown) {
-            if (this.name === 'Megalodon') { // Specific to Megalodon
+            if (this.name === 'Megalodon') {
                 const megalodonAbilityActivationRange = this.width * 1.5;
                 if (targetForAttack && checkDistance(this, targetForAttack) < megalodonAbilityActivationRange) {
                     handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas);
                 }
-            } else if (IS_BOSS_MODE.ENABLED) { // Player characters in boss mode will use abilities if a boss is present
-                if (targetForAttack) { // Simply checking if a boss is the target
+            } else if (IS_BOSS_MODE.ENABLED) {
+                if (targetForAttack) {
                     handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas);
                 }
             }
-            else { // Original chance for simulator mode
+            else {
                 handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas);
             }
         }
@@ -376,6 +380,7 @@ export class Character {
     draw(CHARACTER_SCALE_FACTOR) {
         if (!this.isAlive) return;
 
+        // Apply transparency if phasing or invisible
         if (this.isPhasing) {
             this.ctx.globalAlpha = 0.5;
         } else if (this.isInvisible) {
@@ -386,6 +391,7 @@ export class Character {
 
         this.ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
 
+        // Draw stuck indicator (original colors/alpha)
         if (this.isStunned && this.secondaryAbilityActive && this.secondaryAbilityEffect) {
             if (this.secondaryAbilityEffect.type === 'honeycomb_stick') {
                 this.ctx.fillStyle = 'rgba(255, 165, 0, 0.3)';
@@ -395,6 +401,7 @@ export class Character {
             this.ctx.fillRect(this.x, this.y, this.width, this.height);
         }
 
+        // Draw bleed indicator (original)
         if (this.isBleeding) {
             this.ctx.strokeStyle = 'red';
             this.ctx.lineWidth = 2 * CHARACTER_SCALE_FACTOR;
@@ -404,6 +411,7 @@ export class Character {
             this.ctx.lineWidth = 1;
         }
 
+        // Draw healing over time indicator (original)
         if (this.isHealingOverTime) {
             this.ctx.strokeStyle = 'lime';
             this.ctx.lineWidth = 3 * CHARACTER_SCALE_FACTOR;
@@ -413,6 +421,8 @@ export class Character {
             this.ctx.lineWidth = 1;
         }
 
+
+        // Reset alpha for drawing UI elements like health bar and name
         this.ctx.globalAlpha = this.originalAlpha;
 
         const healthBarWidth = this.width;
@@ -426,20 +436,23 @@ export class Character {
         this.ctx.fillStyle = this.health > this.maxHealth / 2 ? '#22c55e' : (this.health > this.maxHealth / 4 ? '#eab308' : '#ef4444');
         this.ctx.fillRect(this.x, healthBarY, currentHealthWidth, healthBarHeight);
 
+        // In-game name rendering for Megalodon vs. others (kept as requested for boss distinction)
         if (this.isBoss) {
-            this.ctx.fillStyle = MEGALODON_TITLE_COLOR;
-            this.ctx.font = `${20 * CHARACTER_SCALE_FACTOR}px 'Press Start 2P'`;
+            this.ctx.fillStyle = MEGALODON_TITLE_COLOR; // Retain boss-specific visual (not original)
+            this.ctx.font = `${20 * CHARACTER_SCALE_FACTOR}px 'Press Start 2P'`; // Retain boss-specific visual (not original)
         } else {
-            this.ctx.fillStyle = '#333';
-            this.ctx.font = `${12 * CHARACTER_SCALE_FACTOR}px Inter`;
+            this.ctx.fillStyle = '#333'; // Original general character name color
+            this.ctx.font = `${12 * CHARACTER_SCALE_FACTOR}px Inter`; // Original general character font
         }
 
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'alphabetic';
 
-        const displayName = `${this.name} (${Math.round(this.health)})`;
+        // Original Name display logic: only display health for boss.
+        const displayName = this.isBoss ? `${this.name} (${Math.round(this.health)})` : this.name;
         this.ctx.fillText(displayName, this.x + this.width / 2, this.y - (5 * CHARACTER_SCALE_FACTOR));
 
+        // Draw move effects (restored to state before visual fix requests)
         if (this.moveActive && this.moveEffect) {
             this.ctx.globalAlpha = this.originalAlpha;
 
@@ -557,6 +570,7 @@ export class Character {
             }
         }
 
+        // Draw secondary ability effects (restored to state before visual fix requests)
         if (this.secondaryAbilityActive && this.secondaryAbilityEffect) {
             const centerX = this.x + this.width / 2;
             const centerY = this.y + this.height / 2;
@@ -571,20 +585,13 @@ export class Character {
                 if (currentAlpha < 0) currentAlpha = 0;
 
                 this.ctx.save();
-                this.ctx.globalAlpha = currentAlpha;
-                this.ctx.strokeStyle = 'red';
-                this.ctx.lineWidth = 5 * CHARACTER_SCALE_FACTOR;
+                this.ctx.globalAlpha = currentAlpha * 0.7; // Slightly opaque
+                this.ctx.fillStyle = 'rgba(139, 0, 0, 0.7)'; // Dark red color
 
-                const armLength = this.width * 1.5;
-                const startX = centerX;
-                const startY = centerY;
-                const endX = startX + armLength * Math.cos(this.secondaryAbilityEffect.angle);
-                const endY = startY + armLength * Math.sin(this.secondaryAbilityEffect.angle);
-
+                // Draw a circle instead of a line
                 this.ctx.beginPath();
-                this.ctx.moveTo(startX, startY);
-                this.ctx.lineTo(endX, endY);
-                this.ctx.stroke();
+                this.ctx.arc(centerX, centerY, this.secondaryAbilityEffect.radius, 0, Math.PI * 2); // Use dynamic radius from config/abilities
+                this.ctx.fill();
                 this.ctx.restore();
             }
             else if (this.secondaryAbilityEffect.type === 'slippery_floor') {

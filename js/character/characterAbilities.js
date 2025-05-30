@@ -13,13 +13,14 @@ import {
     ELIXIR_HEAL_PER_TICK,
     ELIXIR_HEAL_TICK_INTERVAL_MS,
     MEGALODON_FIN_SLICE_BLEED_DAMAGE_MULTIPLIER,
-    IS_BOSS_MODE // Keep IS_BOSS_MODE import
+    MEGALODON_FIN_SLICE_RADIUS_MULTIPLIER, // NEW: Import the new constant
+    IS_BOSS_MODE
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
 
 /**
- * Handles the activation of a character's secondary ability.
+ * Handles the logic for a character's secondary ability.
  * @param {Character} character - The character performing the ability.
  * @param {Array<Character>} allCharacters - All characters in the game.
  * @param {number} CHARACTER_SCALE_FACTOR - The current scaling factor for characters.
@@ -69,11 +70,10 @@ export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE
     }
 
     // If there's no valid target, don't use the ability
-    if (IS_BOSS_MODE.ENABLED && !targetForAbilityAim && character.secondaryAbilityType !== 'elixir_of_fortitude') { // Elixir is self-buff
+    if (IS_BOSS_MODE.ENABLED && !targetForAbilityAim && character.secondaryAbilityType !== 'elixir_of_fortitude') {
         return;
     }
 
-    // The cooldown check is done in Character.js before calling this function.
     character.lastSecondaryAbilityTime = Date.now();
     character.secondaryAbilityActive = true;
 
@@ -83,12 +83,12 @@ export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE
                 type: 'honeycomb_projectile',
                 x: character.x + character.width / 2,
                 y: character.y + character.height / 2,
-                radius: 10 * CHARACTER_SCALE_FACTOR, // Projectile size
-                speed: HONEYCOMB_PROJECTILE_SPEED * CHARACTER_SCALE_FACTOR, // Projectile speed
-                duration: 300, // Projectile lifespan in frames (adjust as needed)
+                radius: 10 * CHARACTER_SCALE_FACTOR,
+                speed: HONEYCOMB_PROJECTILE_SPEED * CHARACTER_SCALE_FACTOR,
+                duration: 300,
                 dx: 0,
                 dy: 0,
-                angle: 0 // Initial angle, will be set to target if found
+                angle: 0
             };
 
             if (targetForAbilityAim) {
@@ -102,15 +102,20 @@ export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE
                 character.secondaryAbilityEffect.angle = Math.random() * Math.PI * 2;
                 character.secondaryAbilityEffect.dx = Math.cos(character.secondaryAbilityEffect.angle) * character.secondaryAbilityEffect.speed;
                 character.secondaryAbilityEffect.dy = Math.sin(character.secondaryAbilityEffect.angle) * character.secondaryAbilityEffect.speed;
-                displayMessage(`${character.name} launched a Honeycomb! (No specific target found)`);
+                displayMessage(`${character.name} launched a Honeycomb! (No target found)`);
             }
             break;
         case 'fin_slice':
-            const angleToOpponent = targetForAbilityAim ? Math.atan2(targetForAbilityAim.y - character.y, targetForAbilityAim.x - character.x) : Math.random() * Math.PI * 2;
+            // Fin Slice now uses a circular radius for effect.
+            // Check if it's the Megalodon boss to apply a larger radius
+            const finSliceRadius = character.isBoss ?
+                character.width * MEGALODON_FIN_SLICE_RADIUS_MULTIPLIER : // Larger for Megalodon
+                character.width * 1.0; // Original (smaller) for others
+
             character.secondaryAbilityEffect = {
                 type: 'fin_slice',
-                duration: 15,
-                angle: angleToOpponent,
+                duration: 15, // Duration for the visual effect
+                radius: finSliceRadius, // Dynamically set based on character type
                 targetsHit: []
             };
             displayMessage(`${character.name} used Fin Slice!`);
@@ -132,9 +137,9 @@ export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE
             allCharacters.forEach(target => {
                 let isValidTarget = false;
                 if (IS_BOSS_MODE.ENABLED) {
-                    isValidTarget = (character.isBoss !== target.isBoss); // Player debuffs boss, boss debuffs players
+                    isValidTarget = (character.isBoss !== target.isBoss);
                 } else {
-                    isValidTarget = (target !== character); // Debuffs anyone but self
+                    isValidTarget = (target !== character);
                 }
 
                 if (target.isAlive && !target.isPhasing && isValidTarget && checkDistance(character, target) < character.secondaryAbilityEffect.radius) {
@@ -245,21 +250,20 @@ export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FA
                 }
 
                 if (target.isAlive && isValidTarget && !target.isPhasing && !character.secondaryAbilityEffect.targetsHit.includes(target.name)) {
-                    const dist = checkDistance({x: character.x, y: character.y, width: character.width, height: character.height}, target);
-                    const hitRange = character.width * 0.7;
-
-                    if (dist < hitRange) {
+                    // Check collision against the new circular area
+                    const dist = checkDistance(character, target);
+                    if (dist < character.secondaryAbilityEffect.radius + target.width / 2) { // Radius of character + target's half-width
                         const damage = 20 + character.attack * 0.8;
                         target.takeDamage(damage, character.attack, character.name, allCharacters);
                         character.damageDealt += damage;
 
-                        let bleedDamage = FIN_SLICE_BLEED_DAMAGE_PER_TICK + character.attack * 0.1;
-                        if (character.name === 'Megalodon') {
-                            bleedDamage *= MEGALODON_FIN_SLICE_BLEED_DAMAGE_MULTIPLIER;
-                        }
-
                         target.isBleeding = true;
-                        target.bleedDamagePerTick = bleedDamage;
+                        // Apply Megalodon-specific bleed damage if attacker is Megalodon
+                        let bleedDamagePerTick = FIN_SLICE_BLEED_DAMAGE_PER_TICK + character.attack * 0.1;
+                        if (character.isBoss) { // If Fin Slice is from a boss (Megalodon)
+                            bleedDamagePerTick *= MEGALODON_FIN_SLICE_BLEED_DAMAGE_MULTIPLIER;
+                        }
+                        target.bleedDamagePerTick = bleedDamagePerTick;
                         target.lastBleedTickTime = Date.now();
                         target.bleedTarget = character.name;
                         setTimeout(() => {
@@ -370,9 +374,9 @@ function updateHoneyCombProjectile(queenBee, allCharacters, CHARACTER_SCALE_FACT
     for (const target of allCharacters) {
         let isValidTarget = false;
         if (IS_BOSS_MODE.ENABLED) {
-            isValidTarget = (queenBee.isBoss !== target.isBoss); // Queen Bee (player) stuns boss. Boss (if Queen Bee) stuns players.
+            isValidTarget = (queenBee.isBoss !== target.isBoss);
         } else {
-            isValidTarget = (target !== queenBee); // Stuns anyone but self
+            isValidTarget = (target !== queenBee);
         }
 
         if (target.isAlive && !target.isPhasing && !target.isStunned && isValidTarget) {
