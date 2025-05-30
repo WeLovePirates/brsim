@@ -7,12 +7,12 @@ import {
     INVISIBILITY_DODGE_BOOST,
     HONEYCOMB_STUN_DURATION_FRAMES,
     HONEYCOMB_PROJECTILE_SPEED,
-    FIN_SLICE_BLEED_DURATION_FRAMES, // Import new constant
-    FIN_SLICE_BLEED_DAMAGE_PER_TICK, // Import new constant
-    ELIXIR_DEFENSE_BOOST_PERCENTAGE, // NEW: For Alchemist
-    ELIXIR_HEAL_PER_TICK, // NEW: For Alchemist
-    ELIXIR_HEAL_TICK_INTERVAL_MS, // NEW: For Alchemist
-    MEGALODON_FIN_SLICE_BLEED_DAMAGE_MULTIPLIER // NEW
+    FIN_SLICE_BLEED_DURATION_FRAMES,
+    FIN_SLICE_BLEED_DAMAGE_PER_TICK,
+    ELIXIR_DEFENSE_BOOST_PERCENTAGE,
+    ELIXIR_HEAL_PER_TICK,
+    ELIXIR_HEAL_TICK_INTERVAL_MS,
+    MEGALODON_FIN_SLICE_BLEED_DAMAGE_MULTIPLIER
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -25,13 +25,10 @@ import { checkDistance } from '../utils/mathUtils.js';
  * @param {HTMLCanvasElement} canvas - The game canvas.
  */
 export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE_FACTOR, canvas) {
-    // The cooldown check is done in Character.js before calling this function.
-    // If the ability is already active, do nothing.
     if (character.secondaryAbilityActive) {
         return;
     }
 
-    // Queen Bee's Honeycomb as a projectile
     if (character.secondaryAbilityType === 'honeycomb') {
         character.lastSecondaryAbilityTime = Date.now();
         character.secondaryAbilityActive = true;
@@ -39,15 +36,14 @@ export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE
             type: 'honeycomb_projectile',
             x: character.x + character.width / 2,
             y: character.y + character.height / 2,
-            radius: 10 * CHARACTER_SCALE_FACTOR, // Projectile size
-            speed: HONEYCOMB_PROJECTILE_SPEED * CHARACTER_SCALE_FACTOR, // Projectile speed
-            duration: 300, // Projectile lifespan in frames (adjust as needed)
+            radius: 10 * CHARACTER_SCALE_FACTOR,
+            speed: HONEYCOMB_PROJECTILE_SPEED * CHARACTER_SCALE_FACTOR,
+            duration: 300,
             dx: 0,
             dy: 0,
-            angle: 0 // Initial angle, will be set to target if found
+            angle: 0
         };
 
-        // Find the nearest opponent to aim the projectile
         let nearestOpponent = null;
         let minDistance = Infinity;
         allCharacters.forEach(otherChar => {
@@ -68,15 +64,14 @@ export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE
             character.secondaryAbilityEffect.dy = Math.sin(character.secondaryAbilityEffect.angle) * character.secondaryAbilityEffect.speed;
             displayMessage(`${character.name} launched a Honeycomb!`);
         } else {
-            // If no target, launch in a random direction
             character.secondaryAbilityEffect.angle = Math.random() * Math.PI * 2;
             character.secondaryAbilityEffect.dx = Math.cos(character.secondaryAbilityEffect.angle) * character.secondaryAbilityEffect.speed;
             character.secondaryAbilityEffect.dy = Math.sin(character.secondaryAbilityEffect.angle) * character.secondaryAbilityEffect.speed;
             displayMessage(`${character.name} launched a Honeycomb! (No target found)`);
         }
-    } else if (character.secondaryAbilityType === 'fin_slice') { // Handle Shark's Fin Slice
-        character.lastSecondaryAbilityTime = Date.now(); // Set cooldown
-        character.secondaryAbilityActive = true; // Activate ability
+    } else if (character.secondaryAbilityType === 'fin_slice') {
+        character.lastSecondaryAbilityTime = Date.now();
+        character.secondaryAbilityActive = true;
 
         let nearestOpponent = null;
         let minDistance = Infinity;
@@ -88,40 +83,36 @@ export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE
                     nearestOpponent = otherChar;
                 }
             }
-        });
+        }); // MISSING '}' WAS HERE
 
-        // Create the secondaryAbilityEffect for the visual cue and collision detection
         const angleToOpponent = nearestOpponent ? Math.atan2(nearestOpponent.y - character.y, nearestOpponent.x - character.x) : Math.random() * Math.PI * 2;
         character.secondaryAbilityEffect = {
             type: 'fin_slice',
-            duration: 15, // Short duration for the visual slash (e.g., 0.25 seconds)
-            angle: angleToOpponent, // Angle for drawing the slash
-            targetsHit: [] // New: Keep track of targets already hit by this specific slice
+            duration: 15,
+            angle: angleToOpponent,
+            targetsHit: []
         };
 
         displayMessage(`${character.name} used Fin Slice!`);
 
-    } else if (character.secondaryAbilityType === 'elixir_of_fortitude') { // NEW: Alchemist's Secondary Ability
+    } else if (character.secondaryAbilityType === 'elixir_of_fortitude') {
         character.lastSecondaryAbilityTime = Date.now();
         character.secondaryAbilityActive = true;
         character.secondaryAbilityEffect = {
             type: 'elixir_of_fortitude',
-            duration: SECONDARY_ABILITY_DURATION_FRAMES // Standard duration for secondary abilities
+            duration: SECONDARY_ABILITY_DURATION_FRAMES
         };
 
-        // Apply defense boost
         character.defense *= (1 + ELIXIR_DEFENSE_BOOST_PERCENTAGE);
 
-        // Activate healing over time
         character.isHealingOverTime = true;
         character.healAmountPerTick = ELIXIR_HEAL_PER_TICK;
-        character.lastHealTickTime = Date.now(); // Initialize first tick time
+        character.lastHealTickTime = Date.now();
 
         displayMessage(`${character.name} drank Elixir of Fortitude!`);
 
-    } else { // Handle other secondary abilities with their original random chance
-        // If it's not honeycomb or fin_slice, or if you want other abilities to still have a random chance:
-        if (Math.random() < 0.015) { // Original random chance for other abilities
+    } else {
+        if (Math.random() < 0.015) {
             character.lastSecondaryAbilityTime = Date.now();
             character.secondaryAbilityActive = true;
 
@@ -233,22 +224,21 @@ export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FA
         if (character.secondaryAbilityEffect.duration > 0) {
             allCharacters.forEach(target => {
                 if (target !== character && target.isAlive && !target.isPhasing && !character.secondaryAbilityEffect.targetsHit.includes(target.name)) {
-                    const dist = checkDistance(character, target);
-                    const visualRadius = character.width * 1.1;
+                    const dist = checkDistance({x: character.x, y: character.y, width: character.width, height: character.height}, target); // Adjust collision check for melee
+                    const hitRange = character.width * 0.7; // Example melee range
 
-                    if (dist < target.width / 2 + visualRadius) {
+                    if (dist < hitRange) { // Only apply if within a close range
                         const damage = 20 + character.attack * 0.8;
                         target.takeDamage(damage, character.attack, character.name, allCharacters);
                         character.damageDealt += damage;
 
-                        // MODIFIED: Megalodon's Fin Slice deals more bleed damage
                         let bleedDamage = FIN_SLICE_BLEED_DAMAGE_PER_TICK + character.attack * 0.1;
                         if (character.name === 'Megalodon') {
                             bleedDamage *= MEGALODON_FIN_SLICE_BLEED_DAMAGE_MULTIPLIER;
                         }
 
                         target.isBleeding = true;
-                        target.bleedDamagePerTick = bleedDamage; // Use potentially modified bleedDamage
+                        target.bleedDamagePerTick = bleedDamage;
                         target.lastBleedTickTime = Date.now();
                         target.bleedTarget = character.name;
                         setTimeout(() => {

@@ -18,7 +18,8 @@ import {
     FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE,
     ELIXIR_HEAL_PER_TICK,
     ELIXIR_HEAL_TICK_INTERVAL_MS,
-    MEGALODON_FEEDING_FRENZY_BONUS_DAMAGE // NEW
+    MEGALODON_FEEDING_FRENZY_BONUS_DAMAGE,
+    MEGALODON_TITLE_COLOR // NEW: Import Megalodon title color
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -26,7 +27,7 @@ import { handleSpecialMove, updateMoveEffect } from './characterMoves.js';
 import { handleSecondaryAbility, updateAbilityEffect } from './characterAbilities.js';
 
 export class Character {
-    constructor(name, image, moveType, attack, defense, speed, scaleFactor, initialHealthOverride = INITIAL_HEALTH, secondaryAbilityType, secondaryAbilityCooldown, canvas, scaleFactorOverride = 1) { // MODIFIED: Added scaleFactorOverride
+    constructor(name, image, moveType, attack, defense, speed, scaleFactor, initialHealthOverride = INITIAL_HEALTH, secondaryAbilityType, secondaryAbilityCooldown, canvas, scaleFactorOverride = 1, isBoss = false) { // MODIFIED: Added isBoss
         this.name = name;
         this.image = image;
         this.moveType = moveType;
@@ -37,8 +38,8 @@ export class Character {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
 
-        this.width = ORIGINAL_CHARACTER_SIZE * scaleFactor * scaleFactorOverride; // MODIFIED: Apply scaleFactorOverride here
-        this.height = ORIGINAL_CHARACTER_SIZE * scaleFactor * scaleFactorOverride; // MODIFIED: Apply scaleFactorOverride here
+        this.width = ORIGINAL_CHARACTER_SIZE * scaleFactor * scaleFactorOverride;
+        this.height = ORIGINAL_CHARACTER_SIZE * scaleFactor * scaleFactorOverride;
         this.health = initialHealthOverride;
         this.maxHealth = initialHealthOverride;
         this.isAlive = true;
@@ -82,6 +83,7 @@ export class Character {
         this.healAmountPerTick = 0;
         this.lastHealTickTime = 0;
 
+        this.isBoss = isBoss; // NEW: Store if the character is a boss
 
         this.kills = 0;
         this.damageDealt = 0;
@@ -135,7 +137,6 @@ export class Character {
                 } else {
                     damageToTake += damageToTake * FEEDING_FRENZY_LOW_HEALTH_BONUS_DAMAGE_PERCENTAGE;
                 }
-                // displayMessage(`${attacker.name}'s Feeding Frenzy dealt bonus damage to ${this.name}!`); // Log bonus damage
             }
         }
 
@@ -198,7 +199,7 @@ export class Character {
             }
         }
 
-        // NEW: Apply healing over time if active (for Alchemist's Elixir of Fortitude)
+        // Apply healing over time if active (for Alchemist's Elixir of Fortitude)
         if (this.isHealingOverTime && Date.now() - this.lastHealTickTime > ELIXIR_HEAL_TICK_INTERVAL_MS) {
             const healAmount = this.healAmountPerTick;
             this.heal(healAmount);
@@ -368,10 +369,6 @@ export class Character {
         this.ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
 
         // Draw stuck indicator
-        // Condition: Character is stunned AND it was stunned by honeycomb_stick effect
-        // Note: The original 'draw stuck indicator' was drawing a fillRect.
-        // The more recent version you provided has a slightly different visual.
-        // I will use the code you provided in the last Character.js for consistency.
         if (this.isStunned && this.secondaryAbilityActive && this.secondaryAbilityEffect) {
             if (this.secondaryAbilityEffect.type === 'honeycomb_stick') {
                 this.ctx.fillStyle = 'rgba(255, 165, 0, 0.3)'; // Orange translucent for Honeycomb
@@ -391,7 +388,7 @@ export class Character {
             this.ctx.lineWidth = 1; // Reset line width
         }
 
-        // NEW: Draw healing over time indicator (for Alchemist's Elixir of Fortitude)
+        // Draw healing over time indicator (for Alchemist's Elixir of Fortitude)
         if (this.isHealingOverTime) {
             this.ctx.strokeStyle = 'lime'; // Green border
             this.ctx.lineWidth = 3 * CHARACTER_SCALE_FACTOR;
@@ -416,11 +413,21 @@ export class Character {
         this.ctx.fillStyle = this.health > this.maxHealth / 2 ? '#22c55e' : (this.health > this.maxHealth / 4 ? '#eab308' : '#ef4444');
         this.ctx.fillRect(this.x, healthBarY, currentHealthWidth, healthBarHeight);
 
-        this.ctx.fillStyle = '#333';
-        this.ctx.font = `${12 * CHARACTER_SCALE_FACTOR}px Inter`;
+        // MODIFIED: In-game name rendering for Megalodon vs. others
+        if (this.isBoss) {
+            this.ctx.fillStyle = MEGALODON_TITLE_COLOR; // Megalodon-specific color
+            this.ctx.font = `${20 * CHARACTER_SCALE_FACTOR}px 'Press Start 2P'`; // Larger font for boss
+        } else {
+            this.ctx.fillStyle = '#333';
+            this.ctx.font = `${12 * CHARACTER_SCALE_FACTOR}px Inter`;
+        }
+
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'alphabetic';
-        this.ctx.fillText(this.name, this.x + this.width / 2, this.y - (5 * CHARACTER_SCALE_FACTOR));
+
+        // Add health in parentheses next to name
+        const displayName = `${this.name} (${Math.round(this.health)})`;
+        this.ctx.fillText(displayName, this.x + this.width / 2, this.y - (5 * CHARACTER_SCALE_FACTOR));
 
         // Draw move effects
         if (this.moveActive && this.moveEffect) {
@@ -511,7 +518,6 @@ export class Character {
                     });
                 }
             }
-            // Re-added Visual for Feeding Frenzy here
             else if (this.moveType === 'feeding_frenzy') {
                 if (this.moveEffect && this.moveEffect.type === 'feeding_frenzy' && this.moveEffect.duration > 0) {
                     const frenzyAlpha = this.moveEffect.duration / FEEDING_FRENZY_DURATION_FRAMES;
@@ -523,7 +529,6 @@ export class Character {
                     this.ctx.lineWidth = 1;
                 }
             }
-            // NEW: Alchemist Volatile Concoction projectile visual
             else if (this.moveType === 'volatile_concoction') {
                 if (this.moveEffect.type === 'volatile_projectile') {
                     this.ctx.fillStyle = this.moveEffect.color; // Color determined by effect type
@@ -535,7 +540,6 @@ export class Character {
                     this.ctx.globalAlpha = this.moveEffect.alpha;
                     this.ctx.fillStyle = this.moveEffect.color;
                     this.ctx.beginPath();
-                    // THIS IS THE LINE THAT NEEDS TO BE CHANGED (FROM this.x + this.width / 2 TO this.moveEffect.x)
                     this.ctx.arc(this.moveEffect.x, this.moveEffect.y, this.moveEffect.radius, 0, Math.PI * 2);
                     this.ctx.fill();
                     this.ctx.restore();
@@ -547,15 +551,13 @@ export class Character {
         if (this.secondaryAbilityActive && this.secondaryAbilityEffect) {
             const centerX = this.x + this.width / 2;
             const centerY = this.y + this.height / 2;
-            // Use the remaining duration of the effect to calculate alpha for fade out
-            const totalAbilityDurationFrames = SECONDARY_ABILITY_DURATION_FRAMES; // Assuming this is typical
+            const totalAbilityDurationFrames = SECONDARY_ABILITY_DURATION_FRAMES;
             let currentAlpha = 0;
             if (this.secondaryAbilityEffect.type === 'honeycomb_projectile') {
-                currentAlpha = 0.7; // Projectile is consistently opaque
+                currentAlpha = 0.7;
             }
-            // Re-added Fin Slice visual alpha calculation here
             else if (this.secondaryAbilityEffect.type === 'fin_slice') {
-                const slashDuration = 15; // Hardcoded visual duration from characterAbilities.js
+                const slashDuration = 15;
                 currentAlpha = (this.secondaryAbilityEffect.duration / slashDuration);
                 if (currentAlpha < 0) currentAlpha = 0;
 
@@ -576,7 +578,6 @@ export class Character {
                 this.ctx.stroke();
                 this.ctx.restore();
             }
-            // Add other secondary ability drawing logic here based on type
             else if (this.secondaryAbilityEffect.type === 'slippery_floor') {
                 currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
                 this.ctx.save();

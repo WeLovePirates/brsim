@@ -65,7 +65,7 @@ export const MEGALODON_SPEED_MULTIPLIER = 0.6; // Slower than normal characters
 export const MEGALODON_SIZE_MULTIPLIER = 2.5; // Significantly larger
 export const MEGALODON_FEEDING_FRENZY_BONUS_DAMAGE = 0.5; // Increased bonus damage for Feeding Frenzy
 export const MEGALODON_FIN_SLICE_BLEED_DAMAGE_MULTIPLIER = 2; // Stronger bleed
-
+export const MEGALODON_TITLE_COLOR = '#FF0000'; // Red color for Megalodon's title
 
 export const MAP_IMAGE_SOURCE = './sprites/map.png'; // New: Path to your map image
 
@@ -102,7 +102,7 @@ export const IMAGE_SOURCES = [
       secondaryAbility: 'elixir_of_fortitude', secondaryAbilityCooldown: 8000 },
     { name: 'Megalodon', url: './sprites/megalodon.png', move: 'feeding_frenzy', attack: 15 * MEGALODON_ATTACK_MULTIPLIER, defense: 9 * MEGALODON_DEFENSE_MULTIPLIER, speed: 1.1 * MEGALODON_SPEED_MULTIPLIER,
       health: INITIAL_HEALTH * MEGALODON_HEALTH_MULTIPLIER, secondaryAbility: 'fin_slice', secondaryAbilityCooldown: 7000,
-      isDummy: true, // Revert to true, only selectable in Boss Mode.
+      isBoss: true, // MODIFIED: Renamed isDummy to isBoss
       scaleFactorOverride: MEGALODON_SIZE_MULTIPLIER // Custom scale for Megalodon
     }
 ];

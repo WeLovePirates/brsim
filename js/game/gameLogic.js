@@ -21,7 +21,9 @@ export function calculateWinProbabilities(chars) {
 
     let totalPowerScore = 0;
     const characterScores = aliveCharacters.map(char => {
-        const score = char.health * (char.attack * 0.5 + char.defense * 0.5 + char.speed * 0.2);
+        // Bosses have higher score weight to reflect their strength
+        const scoreMultiplier = char.isBoss ? 5 : 1; // Bosses are worth more
+        const score = char.health * (char.attack * 0.5 + char.defense * 0.5 + char.speed * 0.2) * scoreMultiplier;
         totalPowerScore += score;
         return { name: char.name, score: score };
     });
@@ -43,8 +45,9 @@ export function handleCollisions(characters) {
             const char2 = characters[j];
 
             if (char1.isAlive && char2.isAlive && checkCollision(char1, char2)) {
-                // Phasing characters or dummies do not collide or take collision damage
-                if (char1.isPhasing || char2.isPhasing || char1.isDummy || char2.isDummy) {
+                // Phasing characters do not collide or take collision damage
+                // MODIFIED: Removed || char1.isBoss || char2.isBoss
+                if (char1.isPhasing || char2.isPhasing) {
                     continue;
                 }
 
@@ -95,7 +98,8 @@ export function applyStaticFieldDamage(characters) {
     characters.forEach(char => {
         if (char.isAlive && char.secondaryAbilityActive && char.secondaryAbilityEffect && char.secondaryAbilityEffect.type === 'static_field') {
             characters.forEach(target => {
-                if (target !== char && target.isAlive && !target.isDummy && checkDistance(char, target) < char.secondaryAbilityEffect.radius) {
+                // MODIFIED: Only target non-bosses with Static Field (if that's intended, otherwise remove !target.isBoss)
+                if (target !== char && target.isAlive && !target.isBoss && checkDistance(char, target) < char.secondaryAbilityEffect.radius) {
                     target.health -= char.secondaryAbilityEffect.tickDamage;
                     char.damageDealt += char.secondaryAbilityEffect.tickDamage;
                     if (target.health <= 0) {
@@ -123,7 +127,8 @@ export function handleShurikenCollisions(characters) {
                 const projectileY = ninja.moveEffect.y;
 
                 characters.forEach(target => {
-                    if (target !== ninja && target.isAlive && !target.isBlockingShuriken && !target.isDummy && !target.isPhasing &&
+                    // MODIFIED: Only target non-bosses with Shuriken (if that's intended, otherwise remove !target.isBoss)
+                    if (target !== ninja && target.isAlive && !target.isBlockingShuriken && !target.isBoss && !target.isPhasing &&
                         checkDistance({ x: projectileX, y: projectileY, width: 0, height: 0 }, target) < target.width / 2) {
                         const damage = 25;
                         target.takeDamage(damage, ninja.attack, ninja.name, characters);

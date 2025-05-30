@@ -1,6 +1,6 @@
 // js/game/gameLoop.js
 
-import { PROB_UPDATE_INTERVAL, ORIGINAL_SPEED_MAGNITUDE, IS_BOSS_MODE } from '../config.js'; // MODIFIED: Import IS_BOSS_MODE
+import { PROB_UPDATE_INTERVAL, ORIGINAL_SPEED_MAGNITUDE, IS_BOSS_MODE } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import {
     updateCanvasSize,
@@ -10,32 +10,32 @@ import {
     displayGameSummary,
     addSummaryEventListeners,
     removeSummaryEventListeners,
-    drawButton // Import drawButton
+    drawButton
 } from '../ui/uiUpdates.js';
 import { calculateWinProbabilities, handleCollisions, applyStaticFieldDamage, handleShurikenCollisions } from './gameLogic.js';
 import { showMatchCreationMenu, drawMatchCreationMenu, handleMatchCreationClick, matchCreationState } from './matchCreation.js';
 import { getCharacters, setCharacters } from './gameInit.js';
 
-let characters = []; // Initialized by setGameLoopDependencies
-let animationFrameId; // Stores the ID returned by requestAnimationFrame
+let characters = [];
+let animationFrameId;
 let gameRunning = false;
-let gameStartTime; // Re-added: Needed for game duration calculation in summary
-let gameEndTime; // Re-added: Needed for game duration calculation in summary
+let gameStartTime;
+let gameEndTime;
 let lastProbUpdateTime = 0;
 let mapImage;
 let ctx;
 let canvas;
-let currentScreen = 'menu'; // 'menu', 'gameModeSelection', 'matchCreation', 'game', 'summary' // MODIFIED: Added 'gameModeSelection'
+let currentScreen = 'menu'; // 'menu', 'gameModeSelection', 'matchCreation', 'game', 'summary'
 let cachedProbabilities = [];
 
 // --- Fixed Timestep Variables ---
-const MS_PER_UPDATE = 1000 / 60; // Target 60 game logic updates per second (16.67ms per update)
-let lastFrameTimeMs = 0; // The last time `requestAnimationFrame` was called (high-resolution timestamp)
-let deltaTime = 0; // Accumulator for how much time has passed since the last game logic update
+const MS_PER_UPDATE = 1000 / 60;
+let lastFrameTimeMs = 0;
+let deltaTime = 0;
 
 // Variables for in-canvas buttons
 const menuButtons = {
-    start: { text: 'Start Game', x: 0, y: 0, width: 300, height: 60, action: 'showGameModeSelection' }, // MODIFIED: Action changed to showGameModeSelection
+    start: { text: 'Start Game', x: 0, y: 0, width: 300, height: 60, action: 'showGameModeSelection' },
     fullscreenToggle: { text: 'Toggle Fullscreen (F)', x: 0, y: 0, width: 300, height: 60, action: 'toggleFullscreen' }
 };
 
@@ -46,7 +46,6 @@ const gameModeButtons = {
     backToMenu: { text: 'Back to Main Menu', x: 0, y: 0, width: 300, height: 60, action: 'showMainMenu' }
 };
 
-// Define the "Play Again" button for the summary screen here
 export const playAgainButton = {
     text: 'Play Again',
     width: 250,
@@ -129,7 +128,7 @@ function handleCanvasClick(event) {
             const button = menuButtons[key];
             if (clickX >= button.currentX && clickX <= button.currentX + button.currentWidth &&
                 clickY >= button.currentY && clickY <= button.currentY + button.currentHeight) {
-                if (button.action === 'showGameModeSelection') { // MODIFIED: New action
+                if (button.action === 'showGameModeSelection') {
                     showGameModeSelection();
                 } else if (button.action === 'toggleFullscreen') {
                     toggleFullscreen();
@@ -137,18 +136,18 @@ function handleCanvasClick(event) {
                 return;
             }
         }
-    } else if (currentScreen === 'gameModeSelection') { // NEW: Game Mode Selection handling
+    } else if (currentScreen === 'gameModeSelection') {
         for (const key in gameModeButtons) {
             const button = gameModeButtons[key];
             if (clickX >= button.currentX && clickX <= button.currentX + button.currentWidth &&
                 clickY >= button.currentY && clickY <= button.currentY + button.currentHeight) {
                 if (button.action === 'startSimulatorMode') {
-                    matchCreationState.setGameMode('simulator'); // Set mode
-                    showMatchCreationMenu(); // Go to character selection
+                    matchCreationState.setGameMode('simulator');
+                    showMatchCreationMenu();
                     currentScreen = 'matchCreation';
                 } else if (button.action === 'startBossMode') {
-                    matchCreationState.setGameMode('boss'); // Set mode
-                    showMatchCreationMenu(); // Go to character selection
+                    matchCreationState.setGameMode('boss');
+                    showMatchCreationMenu();
                     currentScreen = 'matchCreation';
                 } else if (button.action === 'showMainMenu') {
                     showMainMenu();
@@ -167,8 +166,6 @@ function handleCanvasClick(event) {
         });
         return;
     } else if (currentScreen === 'summary') {
-        // This block is for redundancy if the dedicated event listener isn't active for some reason.
-        // The primary handling for playAgainButton is in uiUpdates.js
         if (clickX >= playAgainButton.currentX && clickX <= playAgainButton.currentX + playAgainButton.currentWidth &&
             clickY >= playAgainButton.currentY && clickY >= playAgainButton.currentY + playAgainButton.currentHeight) {
             return;
@@ -202,10 +199,9 @@ function drawMainMenu() {
     ctx.textBaseline = 'middle';
     ctx.fillText('BRSim', canvas.width / 2, canvas.height / 2 - 100 * CHARACTER_SCALE_FACTOR);
 
-    // Calculate button positions for centering
     const buttonWidth = menuButtons.start.width * CHARACTER_SCALE_FACTOR;
     const buttonHeight = menuButtons.start.height * CHARACTER_SCALE_FACTOR;
-    const buttonSpacing = 20 * CHARACTER_SCALE_FACTOR; // Space between buttons
+    const buttonSpacing = 20 * CHARACTER_SCALE_FACTOR;
 
     menuButtons.start.x = (canvas.width / 2) - (buttonWidth / 2);
     menuButtons.start.y = canvas.height / 2 + 0;
@@ -220,7 +216,7 @@ function drawMainMenu() {
 }
 
 /**
- * NEW: Displays the game mode selection menu.
+ * Displays the game mode selection menu.
  */
 function drawGameModeSelectionMenu() {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
@@ -273,11 +269,10 @@ function updateGameLogic() {
 
     const aliveCharacters = characters.filter(char => char.isAlive);
 
-    // MODIFIED: Win condition check considering Boss Mode
     if (gameRunning) {
-        if (matchCreationState.isBossMode) {
-            const bossAlive = aliveCharacters.some(char => char.name === 'Megalodon');
-            const playersAlive = aliveCharacters.some(char => char.name !== 'Megalodon');
+        if (matchCreationState.currentMode === 'boss') { // MODIFIED: Check currentMode directly
+            const bossAlive = aliveCharacters.some(char => char.isBoss); // MODIFIED: Check for isBoss
+            const playersAlive = aliveCharacters.some(char => !char.isBoss); // MODIFIED: Check for !isBoss
 
             if (!bossAlive) { // Boss defeated
                 gameRunning = false;
@@ -292,7 +287,7 @@ function updateGameLogic() {
                 addSummaryEventListeners(canvas);
                 displayMessage("All heroes have fallen! The Megalodon reigns supreme!");
             }
-        } else { // Simulator Mode (original behavior)
+        } else { // Simulator Mode
             if (aliveCharacters.length <= 1) {
                 gameRunning = false;
                 gameEndTime = performance.now();
@@ -344,7 +339,7 @@ export function gameLoop(timestamp) {
 
     if (currentScreen === 'menu') {
         drawMainMenu();
-    } else if (currentScreen === 'gameModeSelection') { // NEW: Draw game mode selection
+    } else if (currentScreen === 'gameModeSelection') {
         drawGameModeSelectionMenu();
     }
     else if (currentScreen === 'matchCreation') {
@@ -367,12 +362,12 @@ export function gameLoop(timestamp) {
 export function showMainMenu() {
     currentScreen = 'menu';
     gameRunning = false;
-    removeSummaryEventListeners(canvas); // Ensure summary listeners are removed
+    removeSummaryEventListeners(canvas);
     displayMessage("Game assets loaded. Click 'Start Game' to begin!");
 }
 
 /**
- * NEW: Shows the game mode selection menu.
+ * Shows the game mode selection menu.
  */
 export function showGameModeSelection() {
     currentScreen = 'gameModeSelection';
@@ -407,12 +402,13 @@ export async function startGame(requestFullscreenOnStart) {
         data.secondaryAbility,
         data.secondaryAbilityCooldown,
         canvas,
-        data.scaleFactorOverride // Pass scaleFactorOverride
+        data.scaleFactorOverride,
+        data.isBoss // MODIFIED: Pass isBoss
     ));
     setCharacters(newCharacters);
 
     currentScreen = 'game';
-    gameStartTime = performance.now(); // Re-initialized for each new game
+    gameStartTime = performance.now();
 
     deltaTime = 0;
     lastFrameTimeMs = performance.now();
@@ -436,8 +432,8 @@ export async function startGame(requestFullscreenOnStart) {
         char.kills = 0;
         char.damageDealt = 0;
         char.healingDone = 0;
-        char.spawnTime = gameStartTime; // Set spawnTime here for the current game
-        char.deathTime = 0; // Explicitly reset deathTime for a fresh start
+        char.spawnTime = gameStartTime;
+        char.deathTime = 0;
         char.isStunned = false;
 
         char.x = Math.random() * (canvas.width - char.width);
@@ -458,24 +454,16 @@ export async function startGame(requestFullscreenOnStart) {
 
 /**
  * Resets the game to its initial state (main menu).
- * This function is now also responsible for returning from the summary screen.
  */
 export function resetGame() {
     gameRunning = false;
 
-    // Exit fullscreen if in fullscreen
     if (document.fullscreenElement) {
         document.exitFullscreen();
     }
 
-    // Go to main menu
     showMainMenu();
 
-    // Reset character properties for a clean slate for the *next* game.
-    // Note: When you click "Play Again" and go to the main menu, the characters
-    // are often re-selected, leading to new Character instances in startGame.
-    // This `forEach` loop mainly ensures existing character objects are fully reset if reused,
-    // though the primary cleanup for "Play Again" is `showMainMenu()` resetting the screen.
     characters = getCharacters();
     characters.forEach(char => {
         char.health = char.maxHealth;
@@ -496,8 +484,8 @@ export function resetGame() {
         char.kills = 0;
         char.damageDealt = 0;
         char.healingDone = 0;
-        char.spawnTime = 0; // Reset spawnTime for a clean restart
-        char.deathTime = 0; // Reset deathTime for a clean restart
+        char.spawnTime = 0;
+        char.deathTime = 0;
         char.isStunned = false;
 
         char.x = Math.random() * (canvas.width - char.width);

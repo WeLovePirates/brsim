@@ -1,11 +1,11 @@
 // js/game/gameInit.js
 
-import { IMAGE_SOURCES, MAP_IMAGE_SOURCE, ORIGINAL_SPEED_MAGNITUDE } from '../config.js'; // Imports remain
-import { Character } from '../character/Character.js'; // Imports remain
-import { displayMessage } from '../utils/displayUtils.js'; // Imports remain
-import { setGameLoopDependencies, startGame, resetGame, showMainMenu, toggleFullscreen } from './gameLoop.js'; // Imports remain
-import { updateCanvasSize, setCalculateWinProbabilitiesFunction, CHARACTER_SCALE_FACTOR } from '../ui/uiUpdates.js'; // Imports remain
-import { showMatchCreationMenu, matchCreationState } from './matchCreation.js'; // Imports remain
+import { IMAGE_SOURCES, MAP_IMAGE_SOURCE, ORIGINAL_SPEED_MAGNITUDE } from '../config.js';
+import { Character } from '../character/Character.js';
+import { displayMessage } from '../utils/displayUtils.js';
+import { setGameLoopDependencies, startGame, resetGame, showMainMenu, toggleFullscreen } from './gameLoop.js';
+import { updateCanvasSize, setCalculateWinProbabilitiesFunction, CHARACTER_SCALE_FACTOR } from '../ui/uiUpdates.js';
+import { showMatchCreationMenu, matchCreationState } from './matchCreation.js';
 
 let characters = [];
 let mapImage;
@@ -16,32 +16,31 @@ let ctx;
  * Initializes the game, loading assets and setting up UI.
  */
 export async function initGame() {
-    canvas = document.getElementById('gameCanvas'); // Gets canvas element
-    ctx = canvas.getContext('2d'); // Gets 2D rendering context
+    canvas = document.getElementById('gameCanvas');
+    ctx = canvas.getContext('2d');
 
-    updateCanvasSize(canvas, document.fullscreenElement); // Updates canvas size
+    updateCanvasSize(canvas, document.fullscreenElement);
 
-    setCalculateWinProbabilitiesFunction(calculateWinProbabilities); // Sets win probabilities function
+    setCalculateWinProbabilitiesFunction(calculateWinProbabilities);
 
-    displayMessage("Loading game assets..."); // Displays loading message
+    displayMessage("Loading game assets...");
 
-    mapImage = new Image(); // Creates new Image object for map
-    mapImage.src = MAP_IMAGE_SOURCE; // Sets map image source
+    mapImage = new Image();
+    mapImage.src = MAP_IMAGE_SOURCE;
     await new Promise((resolve, reject) => {
-        mapImage.onload = resolve; // Resolves promise on map load
+        mapImage.onload = resolve;
         mapImage.onerror = () => {
-            console.error(`Failed to load map image: ${MAP_IMAGE_SOURCE}`); // Logs error on map load failure
-            // Fallback image for map in case of load error
-            mapImage.src = `https://placehold.co/${canvas.width}x${canvas.height}/000000/FFFFFF?text=MAP+LOAD+ERROR`; // Sets fallback map image source
-            mapImage.onload = resolve; // Resolves promise on fallback map load
-            mapImage.onerror = () => reject(new Error(`Critical: Fallback image failed for map.`)); // Rejects promise on fallback map load failure
+            console.error(`Failed to load map image: ${MAP_IMAGE_SOURCE}`);
+            mapImage.src = `https://placehold.co/${canvas.width}x${canvas.height}/000000/FFFFFF?text=MAP+LOAD+ERROR`;
+            mapImage.onload = resolve;
+            mapImage.onerror = () => reject(new Error(`Critical: Fallback image failed for map.`));
         };
     });
 
-    const loadedImages = await Promise.all(IMAGE_SOURCES.map(src => { // Loads character images
+    const loadedImages = await Promise.all(IMAGE_SOURCES.map(src => {
         return new Promise((resolve, reject) => {
-            const img = new Image(); // Creates new Image object for character
-            img.src = src.url; // Sets character image source
+            const img = new Image();
+            img.src = src.url;
             img.onload = () => resolve({
                 name: src.name,
                 image: img,
@@ -52,13 +51,12 @@ export async function initGame() {
                 health: src.health,
                 secondaryAbility: src.secondaryAbility,
                 secondaryAbilityCooldown: src.secondaryAbilityCooldown,
-                isDummy: src.isDummy || false,
-                scaleFactorOverride: src.scaleFactorOverride || 1 // MODIFIED: Pass scaleFactorOverride
-            }); // Resolves promise on character load
+                isBoss: src.isBoss || false, // MODIFIED: Pass isBoss
+                scaleFactorOverride: src.scaleFactorOverride || 1
+            });
             img.onerror = () => {
-                console.error(`Failed to load image: ${src.url}`); // Logs error on character load failure
-                // Fallback image for character in case of load error
-                img.src = `https://placehold.co/80x80/ff0000/FFFFFF?text=LOAD+ERROR`; // Sets fallback character image source
+                console.error(`Failed to load image: ${src.url}`);
+                img.src = `https://placehold.co/80x80/ff0000/FFFFFF?text=LOAD+ERROR`;
                 img.onload = () => resolve({
                     name: src.name,
                     image: img,
@@ -69,30 +67,28 @@ export async function initGame() {
                     health: src.health,
                     secondaryAbility: src.secondaryAbility,
                     secondaryAbilityCooldown: src.secondaryAbilityCooldown,
-                    isDummy: src.isDummy || false,
-                    scaleFactorOverride: src.scaleFactorOverride || 1 // MODIFIED: Pass scaleFactorOverride
-                }); // Resolves promise on fallback character load
-                img.onerror = () => reject(new Error(`Critical: Fallback image failed for ${src.name}`)); // Rejects promise on fallback character load failure
+                    isBoss: src.isBoss || false, // MODIFIED: Pass isBoss
+                    scaleFactorOverride: src.scaleFactorOverride || 1
+                });
+                img.onerror = () => reject(new Error(`Critical: Fallback image failed for ${src.name}`));
             };
         });
     }));
 
-    setGameLoopDependencies(canvas, ctx, characters, mapImage); // Sets game loop dependencies
+    setGameLoopDependencies(canvas, ctx, characters, mapImage);
 
-    // Initialize match creation with all available characters
-    matchCreationState.setAllAvailableCharacters(loadedImages); // MODIFIED: Renamed function to setAllAvailableCharacters
+    matchCreationState.setAllAvailableCharacters(loadedImages);
 
-    // Show the main menu initially
-    showMainMenu(); // Shows main menu
-    displayMessage("Game assets loaded. Click 'Start Game' to begin!"); // Displays welcome message
+    showMainMenu();
+    displayMessage("Game assets loaded. Click 'Start Game' to begin!");
 }
 
-import { calculateWinProbabilities } from './gameLogic.js'; // Imports calculateWinProbabilities
+import { calculateWinProbabilities } from './gameLogic.js';
 
-export function getCharacters() { // Exports getCharacters function
+export function getCharacters() {
     return characters;
 }
 
-export function setCharacters(newCharacters) { // Exports setCharacters function
+export function setCharacters(newCharacters) {
     characters = newCharacters;
 }
