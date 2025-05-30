@@ -4,7 +4,7 @@
 export const REFERENCE_GAME_WIDTH = 1200;
 export const ORIGINAL_CHARACTER_SIZE = 40;
 export const ORIGINAL_SPEED_MAGNITUDE = 1.5;
-export const INITIAL_HEALTH = 96;
+export const INITIAL_HEALTH = 100;
 export const BASE_COLLISION_DAMAGE = 15; // MODIFIED: Increased base collision damage to 15
 export const HIT_COOLDOWN = 500;
 export const MOVE_COOLDOWN = 2000;

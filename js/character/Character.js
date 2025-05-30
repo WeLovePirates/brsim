@@ -572,7 +572,10 @@ export class Character {
         this.ctx.font = `${12 * CHARACTER_SCALE_FACTOR}px Inter`;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'alphabetic';
-        this.ctx.fillText(this.name, this.x + this.width / 2, this.y - (5 * CHARACTER_SCALE_FACTOR));
+
+        // MODIFICATION HERE: Add health to the name string
+        const displayName = `${this.name} (${Math.ceil(this.health)})`; // Round health up for display
+        this.ctx.fillText(displayName, this.x + this.width / 2, this.y - (5 * CHARACTER_SCALE_FACTOR));
 
         // Draw move effects
         if (this.moveActive && this.moveEffect) {
@@ -697,7 +700,7 @@ export class Character {
                     this.ctx.globalAlpha = this.moveEffect.alpha;
                     this.ctx.fillStyle = this.moveEffect.color;
                     this.ctx.beginPath();
-                    // THIS IS THE LINE THAT NEEDS TO BE CHANGED (FROM this.x + this.width / 2 TO this.moveEffect.x)
+                    // THIS IS THE LINE THAT WAS CHANGED for splash accuracy
                     this.ctx.arc(this.moveEffect.x, this.moveEffect.y, this.moveEffect.radius, 0, Math.PI * 2);
                     this.ctx.fill();
                     this.ctx.restore();
