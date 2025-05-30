@@ -25,7 +25,7 @@ let lastProbUpdateTime = 0;
 let mapImage;
 let ctx;
 let canvas;
-let currentScreen = 'menu'; // 'menu', 'gameModeSelection', 'matchCreation', 'game', 'summary'
+let currentScreen = 'menu';
 let cachedProbabilities = [];
 
 // --- Fixed Timestep Variables ---
@@ -270,24 +270,25 @@ function updateGameLogic() {
     const aliveCharacters = characters.filter(char => char.isAlive);
 
     if (gameRunning) {
-        if (matchCreationState.currentMode === 'boss') { // MODIFIED: Check currentMode directly
-            const bossAlive = aliveCharacters.some(char => char.isBoss); // MODIFIED: Check for isBoss
-            const playersAlive = aliveCharacters.some(char => !char.isBoss); // MODIFIED: Check for !isBoss
+        if (IS_BOSS_MODE.ENABLED) { // MODIFIED: Use IS_BOSS_MODE directly
+            const bossAlive = aliveCharacters.some(char => char.isBoss);
+            const playersAlive = aliveCharacters.some(char => !char.isBoss);
 
-            if (!bossAlive) { // Boss defeated
+            if (!bossAlive) { // Boss defeated - Player victory condition
                 gameRunning = false;
                 gameEndTime = performance.now();
                 currentScreen = 'summary';
                 addSummaryEventListeners(canvas);
                 displayMessage("The Megalodon has been defeated! Victory!");
-            } else if (!playersAlive) { // All players defeated, boss wins
+            } else if (!playersAlive) { // All players defeated - Boss victory condition
                 gameRunning = false;
                 gameEndTime = performance.now();
                 currentScreen = 'summary';
                 addSummaryEventListeners(canvas);
                 displayMessage("All heroes have fallen! The Megalodon reigns supreme!");
             }
-        } else { // Simulator Mode
+            // If both boss and players are alive, the game continues.
+        } else { // Simulator Mode (original behavior)
             if (aliveCharacters.length <= 1) {
                 gameRunning = false;
                 gameEndTime = performance.now();
@@ -403,7 +404,7 @@ export async function startGame(requestFullscreenOnStart) {
         data.secondaryAbilityCooldown,
         canvas,
         data.scaleFactorOverride,
-        data.isBoss // MODIFIED: Pass isBoss
+        data.isBoss
     ));
     setCharacters(newCharacters);
 

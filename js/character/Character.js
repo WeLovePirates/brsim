@@ -19,7 +19,8 @@ import {
     ELIXIR_HEAL_PER_TICK,
     ELIXIR_HEAL_TICK_INTERVAL_MS,
     MEGALODON_FEEDING_FRENZY_BONUS_DAMAGE,
-    MEGALODON_TITLE_COLOR // NEW: Import Megalodon title color
+    MEGALODON_TITLE_COLOR,
+    IS_BOSS_MODE // Keep IS_BOSS_MODE import
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -27,7 +28,7 @@ import { handleSpecialMove, updateMoveEffect } from './characterMoves.js';
 import { handleSecondaryAbility, updateAbilityEffect } from './characterAbilities.js';
 
 export class Character {
-    constructor(name, image, moveType, attack, defense, speed, scaleFactor, initialHealthOverride = INITIAL_HEALTH, secondaryAbilityType, secondaryAbilityCooldown, canvas, scaleFactorOverride = 1, isBoss = false) { // MODIFIED: Added isBoss
+    constructor(name, image, moveType, attack, defense, speed, scaleFactor, initialHealthOverride = INITIAL_HEALTH, secondaryAbilityType, secondaryAbilityCooldown, canvas, scaleFactorOverride = 1, isBoss = false) {
         this.name = name;
         this.image = image;
         this.moveType = moveType;
@@ -47,43 +48,39 @@ export class Character {
         this.lastMoveTime = 0;
         this.moveActive = false;
         this.moveEffect = null;
-        this.lastPatchTime = 0; // Specific for Medic's patch cooldown
+        this.lastPatchTime = 0;
 
         this.secondaryAbilityType = secondaryAbilityType;
         this.secondaryAbilityCooldown = secondaryAbilityCooldown;
         this.lastSecondaryAbilityTime = 0;
         this.secondaryAbilityActive = false;
         this.secondaryAbilityEffect = null;
-        this.originalSpeed = this.speed; // Store original speed for ability resets
-        this.originalDefense = this.defense; // Store original defense for ability resets
-        this.isBlockingShuriken = false; // Specific for Wizard's magic shield
+        this.originalSpeed = this.speed;
+        this.originalDefense = this.defense;
+        this.isBlockingShuriken = false;
 
         this.isDodging = false;
         this.dodgeDirectionAngle = 0;
         this.lastDodgeDirectionChangeTime = 0;
-        this.dodgeChanceBoost = 0; // For abilities like Smoke Bomb
+        this.dodgeChanceBoost = 0;
 
-        // Properties for Ghost abilities
         this.isPhasing = false;
         this.isInvisible = false;
-        this.originalAlpha = 1.0; // To store original drawing alpha
+        this.originalAlpha = 1.0;
 
-        // New properties for Honeycomb ability
         this.isStunned = false;
-        this.originalSpeedWhenStunned = null; // To store speed before stun
+        this.originalSpeedWhenStunned = null;
 
-        // New properties for Shark abilities
-        this.isBleeding = false; // For Fin Slice
-        this.bleedDamagePerTick = 0; // For Fin Slice
-        this.lastBleedTickTime = 0; // For Fin Slice
-        this.bleedTarget = null; // For Fin Slice
+        this.isBleeding = false;
+        this.bleedDamagePerTick = 0;
+        this.lastBleedTickTime = 0;
+        this.bleedTarget = null;
 
-        // NEW: Alchemist properties
         this.isHealingOverTime = false;
         this.healAmountPerTick = 0;
         this.lastHealTickTime = 0;
 
-        this.isBoss = isBoss; // NEW: Store if the character is a boss
+        this.isBoss = isBoss;
 
         this.kills = 0;
         this.damageDealt = 0;
@@ -131,7 +128,6 @@ export class Character {
         const attacker = allCharacters.find(char => char.name === attackerName);
         if (attacker && attacker.moveActive && attacker.moveEffect && attacker.moveEffect.type === 'feeding_frenzy') {
             if (this.health <= this.maxHealth * LOW_HEALTH_THRESHOLD) {
-                // MODIFIED: Apply Megalodon-specific bonus damage if attacker is Megalodon
                 if (attacker.name === 'Megalodon') {
                     damageToTake += damageToTake * MEGALODON_FEEDING_FRENZY_BONUS_DAMAGE;
                 } else {
@@ -146,10 +142,10 @@ export class Character {
         }
 
         // Apply defense
-        damageToTake = Math.max(1, damageToTake - (this.defense * 0.5)); // Reduce damage by half of defense
+        damageToTake = Math.max(1, damageToTake - (this.defense * 0.5));
 
         this.health -= damageToTake;
-        this.lastHitTime[attackerName] = Date.now(); // Record last hit time by this attacker
+        this.lastHitTime[attackerName] = Date.now();
 
         displayMessage(`${this.name} took ${damageToTake.toFixed(0)} damage from ${attackerName}! Health: ${this.health.toFixed(0)}`);
 
@@ -175,31 +171,30 @@ export class Character {
         if (!this.isAlive) return;
 
         // Apply bleed damage if bleeding
-        if (this.isBleeding && Date.now() - this.lastBleedTickTime > 1000) { // Damage every 1 second
-            this.health -= this.bleedDamagePerTick; // Apply bleed damage
-            this.lastBleedTickTime = Date.now(); // Update last tick time
+        if (this.isBleeding && Date.now() - this.lastBleedTickTime > 1000) {
+            this.health -= this.bleedDamagePerTick;
+            this.lastBleedTickTime = Date.now();
 
-            // Find the character who applied the bleed and add to their damageDealt stat
             const bleederChar = characters.find(char => char.name === this.bleedTarget);
             if (bleederChar) {
-                bleederChar.damageDealt += this.bleedDamagePerTick; // Log bleed damage
+                bleederChar.damageDealt += this.bleedDamagePerTick;
             }
 
-            displayMessage(`${this.name} is bleeding! Health: ${this.health.toFixed(0)}`); // Display bleed message
-            if (this.health <= 0) { // Check for death from bleed
+            displayMessage(`${this.name} is bleeding! Health: ${this.health.toFixed(0)}`);
+            if (this.health <= 0) {
                 this.health = 0;
                 this.isAlive = false;
                 this.deathTime = performance.now();
                 displayMessage(`${this.name} bled out!`);
-                const killer = characters.find(char => char.name === this.bleedTarget); // Attribute kill to the bleeder
+                const killer = characters.find(char => char.name === this.bleedTarget);
                 if (killer) {
                     killer.kills++;
                 }
-                return; // Character died, no further updates this frame
+                return;
             }
         }
 
-        // Apply healing over time if active (for Alchemist's Elixir of Fortitude)
+        // Apply healing over time if active
         if (this.isHealingOverTime && Date.now() - this.lastHealTickTime > ELIXIR_HEAL_TICK_INTERVAL_MS) {
             const healAmount = this.healAmountPerTick;
             this.heal(healAmount);
@@ -207,50 +202,63 @@ export class Character {
             displayMessage(`${this.name} healed for ${healAmount.toFixed(0)} from Elixir! Health: ${this.health.toFixed(0)}`);
         }
 
+        updateAbilityEffect(this, characters, CHARACTER_SCALE_FACTOR, this.canvas);
 
-        // Call updateAbilityEffect for this character BEFORE checking isStunned for movement,
-        // so that the stun duration can expire in this frame.
-        updateAbilityEffect(this, characters, CHARACTER_SCALE_FACTOR, this.canvas); // Now takes allCharacters and canvas
-
-        if (this.isStunned) { // If stunned, prevent movement and further ability activation
-            // Still update existing move effects (e.g., swarm)
+        if (this.isStunned) {
             updateMoveEffect(this, characters, CHARACTER_SCALE_FACTOR, this.canvas);
-            return; // Skip normal movement and ability activation
+            return;
         }
 
         const currentTime = Date.now();
         const aliveCharacters = characters.filter(char => char.isAlive);
+
+        // Determine the target for abilities/moves, but NOT necessarily for direct movement.
+        // This is who the character *wants* to attack.
+        let targetForAttack = null;
+        let minDistanceForAttack = Infinity;
+
+        if (IS_BOSS_MODE.ENABLED) {
+            if (this.isBoss) { // Boss targets players
+                aliveCharacters.forEach(otherChar => {
+                    if (otherChar !== this && !otherChar.isBoss) {
+                        const dist = checkDistance(this, otherChar);
+                        if (dist < minDistanceForAttack) {
+                            minDistanceForAttack = dist;
+                            targetForAttack = otherChar;
+                        }
+                    }
+                });
+            } else { // Player targets boss
+                aliveCharacters.forEach(otherChar => {
+                    if (otherChar.isBoss) {
+                        const dist = checkDistance(this, otherChar);
+                        if (dist < minDistanceForAttack) {
+                            minDistanceForAttack = dist;
+                            targetForAttack = otherChar;
+                        }
+                    }
+                });
+            }
+        } else { // Simulator Mode - target any other character
+            aliveCharacters.forEach(otherChar => {
+                if (otherChar !== this) {
+                    const dist = checkDistance(this, otherChar);
+                    if (dist < minDistanceForAttack) {
+                        minDistanceForAttack = dist;
+                        targetForAttack = otherChar;
+                    }
+                }
+            });
+        }
+
+
+        // MOVEMENT LOGIC (Original Movement Patterns Maintained)
+        let appliedMovement = false;
         const allLowHealth = aliveCharacters.every(char => char.health <= char.maxHealth * LOW_HEALTH_THRESHOLD);
 
-        let nearestOpponent = null;
-        let minDistance = Infinity;
-        aliveCharacters.forEach(otherChar => {
-            if (otherChar !== this) {
-                const dist = checkDistance(this, otherChar);
-                if (dist < minDistance) {
-                    minDistance = dist;
-                    nearestOpponent = otherChar;
-                }
-            }
-        });
-
-        let appliedMovement = false;
-
-        // Movement logic (avoiding collisions for phasing characters)
         if (!this.isPhasing) {
-            if (allLowHealth && nearestOpponent && Math.random() < ALL_LOW_HEALTH_RUSH_CHANCE) {
-                const targetX = nearestOpponent.x + nearestOpponent.width / 2;
-                const targetY = nearestOpponent.y + nearestOpponent.height / 2;
-                const currentX = this.x + this.width / 2;
-                const currentY = this.y + this.height / 2;
-
-                const angleToTarget = Math.atan2(targetY - currentY, targetX - currentX);
-                const rushSpeed = ORIGINAL_SPEED_MAGNITUDE * this.speed * CHARACTER_SCALE_FACTOR * 1.2;
-                this.dx = Math.cos(angleToTarget) * rushSpeed;
-                this.dy = Math.sin(angleToTarget) * rushSpeed;
-                appliedMovement = true;
-                this.isDodging = false;
-            } else if (this.health <= this.maxHealth * LOW_HEALTH_THRESHOLD) {
+            // Low health dodge behavior (common to both modes)
+            if (this.health <= this.maxHealth * LOW_HEALTH_THRESHOLD) {
                 const currentDodgeChance = DODGE_CHANCE + this.dodgeChanceBoost + (this.isInvisible ? INVISIBILITY_DODGE_BOOST : 0);
                 if (Math.random() < currentDodgeChance) {
                     if (!this.isDodging || (currentTime - this.lastDodgeDirectionChangeTime > DODGE_DIRECTION_CHANGE_INTERVAL)) {
@@ -269,13 +277,16 @@ export class Character {
                 this.isDodging = false;
             }
 
+            // General seeking and random movement (common to both modes)
             if (!appliedMovement) {
                 const SEEK_CHANCE = 0.008;
                 const RANDOM_DIRECTION_CHANGE_CHANCE = 0.005;
 
-                if (nearestOpponent && Math.random() < SEEK_CHANCE) {
-                    const targetX = nearestOpponent.x + nearestOpponent.width / 2;
-                    const targetY = nearestOpponent.y + nearestOpponent.height / 2;
+                // Characters will seek their 'targetForAttack' for movement too, but with a chance.
+                // This means they won't *always* go straight, but will tend towards it.
+                if (targetForAttack && Math.random() < SEEK_CHANCE) {
+                    const targetX = targetForAttack.x + targetForAttack.width / 2;
+                    const targetY = targetForAttack.y + targetForAttack.height / 2;
                     const currentX = this.x + this.width / 2;
                     const currentY = this.y + this.height / 2;
 
@@ -295,14 +306,15 @@ export class Character {
                     }
                 }
             }
-        }
+        } // End if !this.isPhasing
+
 
         this.x += this.dx;
         this.y += this.dy;
 
         // Boundary checks
         if (this.x + this.width > this.canvas.width || this.x < 0) {
-            if (!this.isPhasing) { // Phasing characters don't bounce
+            if (!this.isPhasing) {
                 this.dx *= -1;
             }
             this.x = Math.max(0, Math.min(this.x, this.canvas.width - this.width));
@@ -311,7 +323,7 @@ export class Character {
             }
         }
         if (this.y + this.height > this.canvas.height || this.y < 0) {
-            if (!this.isPhasing) { // Phasing characters don't bounce
+            if (!this.isPhasing) {
                 this.dy *= -1;
             }
             this.y = Math.max(0, Math.min(this.y, this.canvas.height - this.height));
@@ -320,33 +332,40 @@ export class Character {
             }
         }
 
-        // Special move activation
+        // Special move activation (uses targetForAttack)
         if (Date.now() - this.lastMoveTime > MOVE_COOLDOWN) {
-            // Megalodon will always use its special move if target is within a certain distance
-            if (this.name === 'Megalodon') {
-                const megalodonMoveActivationRange = this.width * 2; // Megalodon activates move if target is within 2x its size
-                if (nearestOpponent && checkDistance(this, nearestOpponent) < megalodonMoveActivationRange) {
+            if (this.name === 'Megalodon') { // Specific to Megalodon
+                const megalodonMoveActivationRange = this.width * 2;
+                if (targetForAttack && checkDistance(this, targetForAttack) < megalodonMoveActivationRange) {
                     handleSpecialMove(this, characters, CHARACTER_SCALE_FACTOR);
                 }
-            } else if (Math.random() < 0.02) { // Chance to activate special move for other characters
+            } else if (IS_BOSS_MODE.ENABLED) { // Player characters in boss mode focus moves on boss
+                if (targetForAttack && Math.random() < 0.05) { // Higher chance for players to use moves on boss
+                     handleSpecialMove(this, characters, CHARACTER_SCALE_FACTOR);
+                }
+            }
+            else if (Math.random() < 0.02) { // Original chance for simulator mode
                  handleSpecialMove(this, characters, CHARACTER_SCALE_FACTOR);
             }
         }
 
-        // Secondary ability activation
+        // Secondary ability activation (uses targetForAttack)
         if (Date.now() - this.lastSecondaryAbilityTime > this.secondaryAbilityCooldown) {
-            // Megalodon will always use its secondary ability if target is within a certain distance
-            if (this.name === 'Megalodon') {
-                const megalodonAbilityActivationRange = this.width * 1.5; // Megalodon activates ability if target is within 1.5x its size
-                if (nearestOpponent && checkDistance(this, nearestOpponent) < megalodonAbilityActivationRange) {
+            if (this.name === 'Megalodon') { // Specific to Megalodon
+                const megalodonAbilityActivationRange = this.width * 1.5;
+                if (targetForAttack && checkDistance(this, targetForAttack) < megalodonAbilityActivationRange) {
                     handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas);
                 }
-            } else {
-                handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas); // Pass canvas here
+            } else if (IS_BOSS_MODE.ENABLED) { // Player characters in boss mode will use abilities if a boss is present
+                if (targetForAttack) { // Simply checking if a boss is the target
+                    handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas);
+                }
+            }
+            else { // Original chance for simulator mode
+                handleSecondaryAbility(this, characters, CHARACTER_SCALE_FACTOR, this.canvas);
             }
         }
 
-        // Update active move effects (ability effects are updated at start of `update`)
         updateMoveEffect(this, characters, CHARACTER_SCALE_FACTOR, this.canvas);
     }
 
@@ -357,40 +376,36 @@ export class Character {
     draw(CHARACTER_SCALE_FACTOR) {
         if (!this.isAlive) return;
 
-        // Apply transparency if phasing or invisible
         if (this.isPhasing) {
-            this.ctx.globalAlpha = 0.5; // Semi-transparent when phasing
+            this.ctx.globalAlpha = 0.5;
         } else if (this.isInvisible) {
-             this.ctx.globalAlpha = 0.3; // More transparent when invisible
+             this.ctx.globalAlpha = 0.3;
         } else {
-            this.ctx.globalAlpha = this.originalAlpha; // Default alpha
+            this.ctx.globalAlpha = this.originalAlpha;
         }
 
         this.ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
 
-        // Draw stuck indicator
         if (this.isStunned && this.secondaryAbilityActive && this.secondaryAbilityEffect) {
             if (this.secondaryAbilityEffect.type === 'honeycomb_stick') {
-                this.ctx.fillStyle = 'rgba(255, 165, 0, 0.3)'; // Orange translucent for Honeycomb
+                this.ctx.fillStyle = 'rgba(255, 165, 0, 0.3)';
             } else if (this.secondaryAbilityEffect.type === 'volatile_concoction_stun') {
-                this.ctx.fillStyle = 'rgba(128, 0, 128, 0.3)'; // Purple translucent for Alchemist stun
+                this.ctx.fillStyle = 'rgba(128, 0, 128, 0.3)';
             }
             this.ctx.fillRect(this.x, this.y, this.width, this.height);
         }
 
-        // Draw bleed indicator (Re-added for Fin Slice)
         if (this.isBleeding) {
             this.ctx.strokeStyle = 'red';
             this.ctx.lineWidth = 2 * CHARACTER_SCALE_FACTOR;
             this.ctx.beginPath();
-            this.ctx.rect(this.x, this.y, this.width, this.height); // Draw a red border
+            this.ctx.rect(this.x, this.y, this.width, this.height);
             this.ctx.stroke();
-            this.ctx.lineWidth = 1; // Reset line width
+            this.ctx.lineWidth = 1;
         }
 
-        // Draw healing over time indicator (for Alchemist's Elixir of Fortitude)
         if (this.isHealingOverTime) {
-            this.ctx.strokeStyle = 'lime'; // Green border
+            this.ctx.strokeStyle = 'lime';
             this.ctx.lineWidth = 3 * CHARACTER_SCALE_FACTOR;
             this.ctx.beginPath();
             this.ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.width / 2 + 8 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
@@ -398,8 +413,6 @@ export class Character {
             this.ctx.lineWidth = 1;
         }
 
-
-        // Reset alpha for drawing UI elements like health bar and name
         this.ctx.globalAlpha = this.originalAlpha;
 
         const healthBarWidth = this.width;
@@ -413,10 +426,9 @@ export class Character {
         this.ctx.fillStyle = this.health > this.maxHealth / 2 ? '#22c55e' : (this.health > this.maxHealth / 4 ? '#eab308' : '#ef4444');
         this.ctx.fillRect(this.x, healthBarY, currentHealthWidth, healthBarHeight);
 
-        // MODIFIED: In-game name rendering for Megalodon vs. others
         if (this.isBoss) {
-            this.ctx.fillStyle = MEGALODON_TITLE_COLOR; // Megalodon-specific color
-            this.ctx.font = `${20 * CHARACTER_SCALE_FACTOR}px 'Press Start 2P'`; // Larger font for boss
+            this.ctx.fillStyle = MEGALODON_TITLE_COLOR;
+            this.ctx.font = `${20 * CHARACTER_SCALE_FACTOR}px 'Press Start 2P'`;
         } else {
             this.ctx.fillStyle = '#333';
             this.ctx.font = `${12 * CHARACTER_SCALE_FACTOR}px Inter`;
@@ -425,13 +437,11 @@ export class Character {
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'alphabetic';
 
-        // Add health in parentheses next to name
         const displayName = `${this.name} (${Math.round(this.health)})`;
         this.ctx.fillText(displayName, this.x + this.width / 2, this.y - (5 * CHARACTER_SCALE_FACTOR));
 
-        // Draw move effects
         if (this.moveActive && this.moveEffect) {
-            this.ctx.globalAlpha = this.originalAlpha; // Start with default for effects
+            this.ctx.globalAlpha = this.originalAlpha;
 
             if (this.moveType === 'confetti') {
                 this.ctx.save();
@@ -506,12 +516,12 @@ export class Character {
                     this.ctx.fill();
                     this.ctx.restore();
                 }
-            } else if (this.moveType === 'swarm') { // Draw mini bees for swarm
+            } else if (this.moveType === 'swarm') {
                 if (this.moveEffect && this.moveEffect.type === 'swarm') {
                     this.moveEffect.bees.forEach(bee => {
                         if (bee.image.complete && bee.image.naturalWidth > 0) {
                             this.ctx.save();
-                            this.ctx.globalAlpha = 0.8; // Bees are slightly transparent
+                            this.ctx.globalAlpha = 0.8;
                             this.ctx.drawImage(bee.image, bee.x, bee.y, bee.size, bee.size);
                             this.ctx.restore();
                         }
@@ -531,7 +541,7 @@ export class Character {
             }
             else if (this.moveType === 'volatile_concoction') {
                 if (this.moveEffect.type === 'volatile_projectile') {
-                    this.ctx.fillStyle = this.moveEffect.color; // Color determined by effect type
+                    this.ctx.fillStyle = this.moveEffect.color;
                     this.ctx.beginPath();
                     this.ctx.arc(this.moveEffect.x, this.moveEffect.y, this.moveEffect.radius, 0, Math.PI * 2);
                     this.ctx.fill();
@@ -547,7 +557,6 @@ export class Character {
             }
         }
 
-        // Draw secondary ability effects
         if (this.secondaryAbilityActive && this.secondaryAbilityEffect) {
             const centerX = this.x + this.width / 2;
             const centerY = this.y + this.height / 2;
@@ -652,11 +661,8 @@ export class Character {
                 this.ctx.fillRect(this.x, this.y, this.width, this.height);
                 this.ctx.restore();
             } else if (this.secondaryAbilityEffect.type === 'phase') {
-                // Phasing alpha is handled at the beginning of draw()
             } else if (this.secondaryAbilityEffect.type === 'invisibility') {
-                // Invisibility alpha is handled at the beginning of draw()
             } else if (this.secondaryAbilityEffect.type === 'elixir_of_fortitude') {
-                // The healing effect is drawn by isHealingOverTime property
             }
         }
     }

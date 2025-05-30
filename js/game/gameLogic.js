@@ -1,6 +1,6 @@
 // js/game/gameLogic.js
 
-import { BASE_COLLISION_DAMAGE } from '../config.js';
+import { BASE_COLLISION_DAMAGE, IS_BOSS_MODE } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkCollision } from '../utils/collisionUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
@@ -22,7 +22,7 @@ export function calculateWinProbabilities(chars) {
     let totalPowerScore = 0;
     const characterScores = aliveCharacters.map(char => {
         // Bosses have higher score weight to reflect their strength
-        const scoreMultiplier = char.isBoss ? 5 : 1; // Bosses are worth more
+        const scoreMultiplier = char.isBoss ? 5 : 1;
         const score = char.health * (char.attack * 0.5 + char.defense * 0.5 + char.speed * 0.2) * scoreMultiplier;
         totalPowerScore += score;
         return { name: char.name, score: score };
@@ -46,21 +46,33 @@ export function handleCollisions(characters) {
 
             if (char1.isAlive && char2.isAlive && checkCollision(char1, char2)) {
                 // Phasing characters do not collide or take collision damage
-                // MODIFIED: Removed || char1.isBoss || char2.isBoss
                 if (char1.isPhasing || char2.isPhasing) {
                     continue;
                 }
 
-                const damage1 = BASE_COLLISION_DAMAGE;
-                const damage2 = BASE_COLLISION_DAMAGE;
+                // NEW LOGIC FOR COLLISION DAMAGE ONLY
+                let applyCollisionDamage = true;
+                if (IS_BOSS_MODE.ENABLED) {
+                    // In Boss Mode, do NOT apply collision damage if both are players.
+                    if (!char1.isBoss && !char2.isBoss) {
+                        applyCollisionDamage = false;
+                    }
+                }
 
-                char1.takeDamage(damage1, char2.attack, char2.name, characters);
-                char2.takeDamage(damage2, char1.attack, char1.name, characters);
+                // Regardless of damage, characters will still repel each other unless they are phasing.
+                // Apply damage if allowed by the flag
+                if (applyCollisionDamage) {
+                    const damage1 = BASE_COLLISION_DAMAGE;
+                    const damage2 = BASE_COLLISION_DAMAGE;
 
-                char2.damageDealt += damage1;
-                char1.damageDealt += damage2;
+                    char1.takeDamage(damage1, char2.attack, char2.name, characters);
+                    char2.takeDamage(damage2, char1.attack, char1.name, characters);
 
-                // Simple repulsion to prevent characters from sticking
+                    char2.damageDealt += damage1;
+                    char1.damageDealt += damage2;
+                }
+
+                // Always apply repulsion (physical collision), even if no damage is dealt
                 const overlapX = Math.min(char1.x + char1.width, char2.x + char2.width) - Math.max(char1.x, char2.x);
                 const overlapY = Math.min(char1.y + char1.height, char2.y + char2.height) - Math.max(char1.y, char2.y);
 
@@ -98,14 +110,22 @@ export function applyStaticFieldDamage(characters) {
     characters.forEach(char => {
         if (char.isAlive && char.secondaryAbilityActive && char.secondaryAbilityEffect && char.secondaryAbilityEffect.type === 'static_field') {
             characters.forEach(target => {
-                // MODIFIED: Only target non-bosses with Static Field (if that's intended, otherwise remove !target.isBoss)
-                if (target !== char && target.isAlive && !target.isBoss && checkDistance(char, target) < char.secondaryAbilityEffect.radius) {
+                let shouldTarget = false;
+                if (IS_BOSS_MODE.ENABLED) {
+                    // In boss mode, player's static field targets boss. Boss's static field targets players.
+                    shouldTarget = (char.isBoss !== target.isBoss);
+                } else {
+                    // In simulator mode, static field targets anyone not the caster.
+                    shouldTarget = (target !== char);
+                }
+
+                if (target.isAlive && !target.isPhasing && shouldTarget && checkDistance(char, target) < char.secondaryAbilityEffect.radius) {
                     target.health -= char.secondaryAbilityEffect.tickDamage;
                     char.damageDealt += char.secondaryAbilityEffect.tickDamage;
                     if (target.health <= 0) {
                         target.health = 0;
                         target.isAlive = false;
-                        target.deathTime = performance.now(); // Keep deathTime for general summary time calculations
+                        target.deathTime = performance.now();
                         displayMessage(`${target.name} was defeated by ${char.name}'s Static Field!`);
                         char.kills++;
                     }
@@ -127,13 +147,21 @@ export function handleShurikenCollisions(characters) {
                 const projectileY = ninja.moveEffect.y;
 
                 characters.forEach(target => {
-                    // MODIFIED: Only target non-bosses with Shuriken (if that's intended, otherwise remove !target.isBoss)
-                    if (target !== ninja && target.isAlive && !target.isBlockingShuriken && !target.isBoss && !target.isPhasing &&
+                    let shouldTarget = false;
+                    if (IS_BOSS_MODE.ENABLED) {
+                        // In boss mode, shuriken from player targets boss. Shuriken from boss targets players.
+                        shouldTarget = (ninja.isBoss !== target.isBoss);
+                    } else {
+                        // In simulator mode, shuriken targets anyone not the caster.
+                        shouldTarget = (target !== ninja);
+                    }
+
+                    if (target.isAlive && !target.isBlockingShuriken && !target.isPhasing && shouldTarget &&
                         checkDistance({ x: projectileX, y: projectileY, width: 0, height: 0 }, target) < target.width / 2) {
                         const damage = 25;
                         target.takeDamage(damage, ninja.attack, ninja.name, characters);
                         ninja.damageDealt += damage;
-                        ninja.moveActive = false;
+                        ninja.moveActive = false; // Projectile dissipates on hit
                         ninja.moveEffect = null;
                     }
                 });

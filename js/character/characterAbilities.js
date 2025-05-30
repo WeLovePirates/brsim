@@ -12,13 +12,14 @@ import {
     ELIXIR_DEFENSE_BOOST_PERCENTAGE,
     ELIXIR_HEAL_PER_TICK,
     ELIXIR_HEAL_TICK_INTERVAL_MS,
-    MEGALODON_FIN_SLICE_BLEED_DAMAGE_MULTIPLIER
+    MEGALODON_FIN_SLICE_BLEED_DAMAGE_MULTIPLIER,
+    IS_BOSS_MODE // Keep IS_BOSS_MODE import
 } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
 
 /**
- * Handles the logic for a character's secondary ability.
+ * Handles the activation of a character's secondary ability.
  * @param {Character} character - The character performing the ability.
  * @param {Array<Character>} allCharacters - All characters in the game.
  * @param {number} CHARACTER_SCALE_FACTOR - The current scaling factor for characters.
@@ -29,179 +30,192 @@ export function handleSecondaryAbility(character, allCharacters, CHARACTER_SCALE
         return;
     }
 
-    if (character.secondaryAbilityType === 'honeycomb') {
-        character.lastSecondaryAbilityTime = Date.now();
-        character.secondaryAbilityActive = true;
-        character.secondaryAbilityEffect = {
-            type: 'honeycomb_projectile',
-            x: character.x + character.width / 2,
-            y: character.y + character.height / 2,
-            radius: 10 * CHARACTER_SCALE_FACTOR,
-            speed: HONEYCOMB_PROJECTILE_SPEED * CHARACTER_SCALE_FACTOR,
-            duration: 300,
-            dx: 0,
-            dy: 0,
-            angle: 0
-        };
+    // Determine the target for abilities/moves. This logic is crucial for boss mode.
+    let targetForAbilityAim = null;
+    let minDistanceForAbilityAim = Infinity;
 
-        let nearestOpponent = null;
-        let minDistance = Infinity;
+    if (IS_BOSS_MODE.ENABLED) {
+        if (character.isBoss) { // Boss targets players
+            allCharacters.forEach(otherChar => {
+                if (otherChar !== character && !otherChar.isBoss && otherChar.isAlive) {
+                    const dist = checkDistance(character, otherChar);
+                    if (dist < minDistanceForAbilityAim) {
+                        minDistanceForAbilityAim = dist;
+                        targetForAbilityAim = otherChar;
+                    }
+                }
+            });
+        } else { // Player targets boss
+            allCharacters.forEach(otherChar => {
+                if (otherChar.isBoss && otherChar.isAlive) {
+                    const dist = checkDistance(character, otherChar);
+                    if (dist < minDistanceForAbilityAim) {
+                        minDistanceForAbilityAim = dist;
+                        targetForAbilityAim = otherChar;
+                    }
+                }
+            });
+        }
+    } else { // Simulator Mode - target any other character
         allCharacters.forEach(otherChar => {
-            if (otherChar !== character && otherChar.isAlive && !otherChar.isPhasing) {
+            if (otherChar !== character && otherChar.isAlive) {
                 const dist = checkDistance(character, otherChar);
-                if (dist < minDistance) {
-                    minDistance = dist;
-                    nearestOpponent = otherChar;
+                if (dist < minDistanceForAbilityAim) {
+                    minDistanceForAbilityAim = dist;
+                    targetForAbilityAim = otherChar;
                 }
             }
         });
+    }
 
-        if (nearestOpponent) {
-            const angleToTarget = Math.atan2(nearestOpponent.y + nearestOpponent.height / 2 - character.secondaryAbilityEffect.y,
-                                             nearestOpponent.x + nearestOpponent.width / 2 - character.secondaryAbilityEffect.x);
-            character.secondaryAbilityEffect.angle = angleToTarget;
-            character.secondaryAbilityEffect.dx = Math.cos(character.secondaryAbilityEffect.angle) * character.secondaryAbilityEffect.speed;
-            character.secondaryAbilityEffect.dy = Math.sin(character.secondaryAbilityEffect.angle) * character.secondaryAbilityEffect.speed;
-            displayMessage(`${character.name} launched a Honeycomb!`);
-        } else {
-            character.secondaryAbilityEffect.angle = Math.random() * Math.PI * 2;
-            character.secondaryAbilityEffect.dx = Math.cos(character.secondaryAbilityEffect.angle) * character.secondaryAbilityEffect.speed;
-            character.secondaryAbilityEffect.dy = Math.sin(character.secondaryAbilityEffect.angle) * character.secondaryAbilityEffect.speed;
-            displayMessage(`${character.name} launched a Honeycomb! (No target found)`);
-        }
-    } else if (character.secondaryAbilityType === 'fin_slice') {
-        character.lastSecondaryAbilityTime = Date.now();
-        character.secondaryAbilityActive = true;
+    // If there's no valid target, don't use the ability
+    if (IS_BOSS_MODE.ENABLED && !targetForAbilityAim && character.secondaryAbilityType !== 'elixir_of_fortitude') { // Elixir is self-buff
+        return;
+    }
 
-        let nearestOpponent = null;
-        let minDistance = Infinity;
-        allCharacters.forEach(otherChar => {
-            if (otherChar !== character && otherChar.isAlive && !otherChar.isPhasing) {
-                const dist = checkDistance(character, otherChar);
-                if (dist < minDistance) {
-                    minDistance = dist;
-                    nearestOpponent = otherChar;
+    // The cooldown check is done in Character.js before calling this function.
+    character.lastSecondaryAbilityTime = Date.now();
+    character.secondaryAbilityActive = true;
+
+    switch (character.secondaryAbilityType) {
+        case 'honeycomb':
+            character.secondaryAbilityEffect = {
+                type: 'honeycomb_projectile',
+                x: character.x + character.width / 2,
+                y: character.y + character.height / 2,
+                radius: 10 * CHARACTER_SCALE_FACTOR, // Projectile size
+                speed: HONEYCOMB_PROJECTILE_SPEED * CHARACTER_SCALE_FACTOR, // Projectile speed
+                duration: 300, // Projectile lifespan in frames (adjust as needed)
+                dx: 0,
+                dy: 0,
+                angle: 0 // Initial angle, will be set to target if found
+            };
+
+            if (targetForAbilityAim) {
+                const angleToTarget = Math.atan2(targetForAbilityAim.y + targetForAbilityAim.height / 2 - character.secondaryAbilityEffect.y,
+                                                 targetForAbilityAim.x + targetForAbilityAim.width / 2 - character.secondaryAbilityEffect.x);
+                character.secondaryAbilityEffect.angle = angleToTarget;
+                character.secondaryAbilityEffect.dx = Math.cos(character.secondaryAbilityEffect.angle) * character.secondaryAbilityEffect.speed;
+                character.secondaryAbilityEffect.dy = Math.sin(character.secondaryAbilityEffect.angle) * character.secondaryAbilityEffect.speed;
+                displayMessage(`${character.name} launched a Honeycomb!`);
+            } else {
+                character.secondaryAbilityEffect.angle = Math.random() * Math.PI * 2;
+                character.secondaryAbilityEffect.dx = Math.cos(character.secondaryAbilityEffect.angle) * character.secondaryAbilityEffect.speed;
+                character.secondaryAbilityEffect.dy = Math.sin(character.secondaryAbilityEffect.angle) * character.secondaryAbilityEffect.speed;
+                displayMessage(`${character.name} launched a Honeycomb! (No specific target found)`);
+            }
+            break;
+        case 'fin_slice':
+            const angleToOpponent = targetForAbilityAim ? Math.atan2(targetForAbilityAim.y - character.y, targetForAbilityAim.x - character.x) : Math.random() * Math.PI * 2;
+            character.secondaryAbilityEffect = {
+                type: 'fin_slice',
+                duration: 15,
+                angle: angleToOpponent,
+                targetsHit: []
+            };
+            displayMessage(`${character.name} used Fin Slice!`);
+            break;
+        case 'elixir_of_fortitude':
+            character.secondaryAbilityEffect = {
+                type: 'elixir_of_fortitude',
+                duration: SECONDARY_ABILITY_DURATION_FRAMES
+            };
+            character.defense *= (1 + ELIXIR_DEFENSE_BOOST_PERCENTAGE);
+            character.isHealingOverTime = true;
+            character.healAmountPerTick = ELIXIR_HEAL_PER_TICK;
+            character.lastHealTickTime = Date.now();
+            displayMessage(`${character.name} drank Elixir of Fortitude!`);
+            break;
+        case 'slippery_floor':
+            character.secondaryAbilityEffect = { type: 'slippery_floor', radius: character.width * 2.5, duration: SECONDARY_ABILITY_DURATION_FRAMES };
+            displayMessage(`${character.name} used Slippery Floor!`);
+            allCharacters.forEach(target => {
+                let isValidTarget = false;
+                if (IS_BOSS_MODE.ENABLED) {
+                    isValidTarget = (character.isBoss !== target.isBoss); // Player debuffs boss, boss debuffs players
+                } else {
+                    isValidTarget = (target !== character); // Debuffs anyone but self
                 }
-            }
-        }); // MISSING '}' WAS HERE
 
-        const angleToOpponent = nearestOpponent ? Math.atan2(nearestOpponent.y - character.y, nearestOpponent.x - character.x) : Math.random() * Math.PI * 2;
-        character.secondaryAbilityEffect = {
-            type: 'fin_slice',
-            duration: 15,
-            angle: angleToOpponent,
-            targetsHit: []
-        };
-
-        displayMessage(`${character.name} used Fin Slice!`);
-
-    } else if (character.secondaryAbilityType === 'elixir_of_fortitude') {
-        character.lastSecondaryAbilityTime = Date.now();
-        character.secondaryAbilityActive = true;
-        character.secondaryAbilityEffect = {
-            type: 'elixir_of_fortitude',
-            duration: SECONDARY_ABILITY_DURATION_FRAMES
-        };
-
-        character.defense *= (1 + ELIXIR_DEFENSE_BOOST_PERCENTAGE);
-
-        character.isHealingOverTime = true;
-        character.healAmountPerTick = ELIXIR_HEAL_PER_TICK;
-        character.lastHealTickTime = Date.now();
-
-        displayMessage(`${character.name} drank Elixir of Fortitude!`);
-
-    } else {
-        if (Math.random() < 0.015) {
-            character.lastSecondaryAbilityTime = Date.now();
-            character.secondaryAbilityActive = true;
-
-            switch (character.secondaryAbilityType) {
-                case 'slippery_floor':
-                    character.secondaryAbilityEffect = { type: 'slippery_floor', radius: character.width * 2.5, duration: SECONDARY_ABILITY_DURATION_FRAMES };
-                    displayMessage(`${character.name} used Slippery Floor!`);
-                    allCharacters.forEach(target => {
-                        if (target !== character && target.isAlive && !target.isPhasing && checkDistance(character, target) < character.secondaryAbilityEffect.radius) {
-                            if (target.originalSpeedForSecondaryAbility === undefined) {
-                                target.originalSpeedForSecondaryAbility = target.speed;
-                            }
-                            target.speed *= 0.5;
-                            const newSpeedMagnitude = ORIGINAL_SPEED_MAGNITUDE * target.speed * CHARACTER_SCALE_FACTOR;
-                            const currentAngle = Math.atan2(target.dy, target.dx);
-                            target.dx = Math.cos(currentAngle) * newSpeedMagnitude;
-                            target.dy = Math.sin(currentAngle) * newSpeedMagnitude;
-                            setTimeout(() => {
-                                if (target.originalSpeedForSecondaryAbility !== undefined) {
-                                    target.speed = target.originalSpeedForSecondaryAbility;
-                                    delete target.originalSpeedForSecondaryAbility;
-                                    const revertedSpeedMagnitude = ORIGINAL_SPEED_MAGNITUDE * target.speed * CHARACTER_SCALE_FACTOR;
-                                    const revertedAngle = Math.atan2(target.dy, target.dx);
-                                    target.dx = Math.cos(revertedAngle) * revertedSpeedMagnitude;
-                                    target.dy = Math.sin(revertedAngle) * revertedSpeedMagnitude;
-                                }
-                            }, SECONDARY_ABILITY_DURATION_FRAMES * (1000/60));
+                if (target.isAlive && !target.isPhasing && isValidTarget && checkDistance(character, target) < character.secondaryAbilityEffect.radius) {
+                    if (target.originalSpeedForSecondaryAbility === undefined) {
+                        target.originalSpeedForSecondaryAbility = target.speed;
+                    }
+                    target.speed *= 0.5;
+                    const newSpeedMagnitude = ORIGINAL_SPEED_MAGNITUDE * target.speed * CHARACTER_SCALE_FACTOR;
+                    const currentAngle = Math.atan2(target.dy, target.dx);
+                    target.dx = Math.cos(currentAngle) * newSpeedMagnitude;
+                    target.dy = Math.sin(currentAngle) * newSpeedMagnitude;
+                    setTimeout(() => {
+                        if (target.originalSpeedForSecondaryAbility !== undefined) {
+                            target.speed = target.originalSpeedForSecondaryAbility;
+                            delete target.originalSpeedForSecondaryAbility;
+                            const revertedSpeedMagnitude = ORIGINAL_SPEED_MAGNITUDE * target.speed * CHARACTER_SCALE_FACTOR;
+                            const revertedAngle = Math.atan2(target.dy, target.dx);
+                            target.dx = Math.cos(revertedAngle) * revertedSpeedMagnitude;
+                            target.dy = Math.sin(revertedAngle) * revertedSpeedMagnitude;
                         }
-                    });
-                    break;
-                case 'iron_skin':
-                    character.secondaryAbilityEffect = { type: 'iron_skin', duration: SECONDARY_ABILITY_DURATION_FRAMES };
-                    character.defense *= 1.5;
-                    displayMessage(`${character.name} used Iron Skin!`);
-                    break;
-                case 'spur_of_moment':
-                    character.secondaryAbilityEffect = { type: 'spur_of_moment', duration: SECONDARY_ABILITY_DURATION_FRAMES };
-                    character.speed *= 1.8;
-                    const currentAngleGalloner = Math.atan2(character.dy, character.dx);
-                    const newSpeedMagnitudeGalloner = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
-                    character.dx = Math.cos(currentAngleGalloner) * newSpeedMagnitudeGalloner;
-                    character.dy = Math.sin(currentAngleGalloner) * newSpeedMagnitudeGalloner;
-                    displayMessage(`${character.name} used Spur of the Moment!`);
-                    break;
-                case 'static_field':
-                    character.secondaryAbilityEffect = { type: 'static_field', radius: character.width * 1.5, duration: SECONDARY_ABILITY_DURATION_FRAMES, tickDamage: 0.5 };
-                    displayMessage(`${character.name} created a Static Field!`);
-                    break;
-                case 'adrenaline_shot':
-                    character.secondaryAbilityEffect = { type: 'adrenaline_shot', duration: SECONDARY_ABILITY_DURATION_FRAMES };
-                    character.speed *= 2.0;
-                    const currentAngleMedic = Math.atan2(character.dy, character.dx);
-                    const newSpeedMagnitudeMedic = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
-                    character.dx = Math.cos(currentAngleMedic) * newSpeedMagnitudeMedic;
-                    character.dy = Math.sin(currentAngleMedic) * newSpeedMagnitudeMedic;
-                    displayMessage(`${character.name} used Adrenaline Shot!`);
-                    break;
-                case 'smoke_bomb':
-                    character.secondaryAbilityEffect = { type: 'smoke_bomb', radius: character.width * 2, duration: SECONDARY_ABILITY_DURATION_FRAMES };
-                    displayMessage(`${character.name} deployed a Smoke Bomb!`);
-                    character.dodgeChanceBoost = 0.5;
-                    break;
-                case 'magic_shield':
-                    character.secondaryAbilityEffect = { type: 'magic_shield', duration: SECONDARY_ABILITY_DURATION_FRAMES };
-                    character.isBlockingShuriken = true;
-                    displayMessage(`${character.name} cast Magic Shield!`);
-                    break;
-                case 'fortify':
-                    character.secondaryAbilityEffect = { type: 'fortify', duration: SECONDARY_ABILITY_DURATION_FRAMES };
-                    character.defense *= 2.0;
-                    displayMessage(`${character.name} fortified themselves!`);
-                    break;
-                case 'phase':
-                    character.secondaryAbilityEffect = { type: 'phase', duration: SECONDARY_ABILITY_DURATION_FRAMES };
-                    character.isPhasing = true;
-                    character.speed *= 1.5;
-                    const currentAnglePhase = Math.atan2(character.dy, character.dx);
-                    const newSpeedMagnitudePhase = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
-                    character.dx = Math.cos(currentAnglePhase) * newSpeedMagnitudePhase;
-                    character.dy = Math.sin(currentAnglePhase) * newSpeedMagnitudePhase;
-                    displayMessage(`${character.name} is phasing!`);
-                    break;
-                case 'invisibility':
-                    character.secondaryAbilityEffect = { type: 'invisibility', duration: SECONDARY_ABILITY_DURATION_FRAMES };
-                    character.isInvisible = true;
-                    displayMessage(`${character.name} turned invisible!`);
-                    break;
-            }
-        }
+                    }, SECONDARY_ABILITY_DURATION_FRAMES * (1000/60));
+                }
+            });
+            break;
+        case 'iron_skin':
+            character.secondaryAbilityEffect = { type: 'iron_skin', duration: SECONDARY_ABILITY_DURATION_FRAMES };
+            character.defense *= 1.5;
+            displayMessage(`${character.name} used Iron Skin!`);
+            break;
+        case 'spur_of_moment':
+            character.secondaryAbilityEffect = { type: 'spur_of_moment', duration: SECONDARY_ABILITY_DURATION_FRAMES };
+            character.speed *= 1.8;
+            const currentAngleGalloner = Math.atan2(character.dy, character.dx);
+            const newSpeedMagnitudeGalloner = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
+            character.dx = Math.cos(currentAngleGalloner) * newSpeedMagnitudeGalloner;
+            character.dy = Math.sin(currentAngleGalloner) * newSpeedMagnitudeGalloner;
+            displayMessage(`${character.name} used Spur of the Moment!`);
+            break;
+        case 'static_field':
+            character.secondaryAbilityEffect = { type: 'static_field', radius: character.width * 1.5, duration: SECONDARY_ABILITY_DURATION_FRAMES, tickDamage: 0.5 };
+            displayMessage(`${character.name} created a Static Field!`);
+            break;
+        case 'adrenaline_shot':
+            character.secondaryAbilityEffect = { type: 'adrenaline_shot', duration: SECONDARY_ABILITY_DURATION_FRAMES };
+            character.speed *= 2.0;
+            const currentAngleMedic = Math.atan2(character.dy, character.dx);
+            const newSpeedMagnitudeMedic = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
+            character.dx = Math.cos(currentAngleMedic) * newSpeedMagnitudeMedic;
+            character.dy = Math.sin(currentAngleMedic) * newSpeedMagnitudeMedic;
+            displayMessage(`${character.name} used Adrenaline Shot!`);
+            break;
+        case 'smoke_bomb':
+            character.secondaryAbilityEffect = { type: 'smoke_bomb', radius: character.width * 2, duration: SECONDARY_ABILITY_DURATION_FRAMES };
+            displayMessage(`${character.name} deployed a Smoke Bomb!`);
+            character.dodgeChanceBoost = 0.5;
+            break;
+        case 'magic_shield':
+            character.secondaryAbilityEffect = { type: 'magic_shield', duration: SECONDARY_ABILITY_DURATION_FRAMES };
+            character.isBlockingShuriken = true;
+            displayMessage(`${character.name} cast Magic Shield!`);
+            break;
+        case 'fortify':
+            character.secondaryAbilityEffect = { type: 'fortify', duration: SECONDARY_ABILITY_DURATION_FRAMES };
+            character.defense *= 2.0;
+            displayMessage(`${character.name} fortified themselves!`);
+            break;
+        case 'phase':
+            character.secondaryAbilityEffect = { type: 'phase', duration: SECONDARY_ABILITY_DURATION_FRAMES };
+            character.isPhasing = true;
+            character.speed *= 1.5;
+            const currentAnglePhase = Math.atan2(character.dy, character.dx);
+            const newSpeedMagnitudePhase = ORIGINAL_SPEED_MAGNITUDE * character.speed * CHARACTER_SCALE_FACTOR;
+            character.dx = Math.cos(currentAnglePhase) * newSpeedMagnitudePhase;
+            character.dy = Math.sin(currentAnglePhase) * newSpeedMagnitudePhase;
+            displayMessage(`${character.name} is phasing!`);
+            break;
+        case 'invisibility':
+            character.secondaryAbilityEffect = { type: 'invisibility', duration: SECONDARY_ABILITY_DURATION_FRAMES };
+            character.isInvisible = true;
+            displayMessage(`${character.name} turned invisible!`);
+            break;
     }
 }
 
@@ -223,11 +237,18 @@ export function updateAbilityEffect(character, allCharacters, CHARACTER_SCALE_FA
     if (character.secondaryAbilityEffect.type === 'fin_slice') {
         if (character.secondaryAbilityEffect.duration > 0) {
             allCharacters.forEach(target => {
-                if (target !== character && target.isAlive && !target.isPhasing && !character.secondaryAbilityEffect.targetsHit.includes(target.name)) {
-                    const dist = checkDistance({x: character.x, y: character.y, width: character.width, height: character.height}, target); // Adjust collision check for melee
-                    const hitRange = character.width * 0.7; // Example melee range
+                let isValidTarget = false;
+                if (IS_BOSS_MODE.ENABLED) {
+                    isValidTarget = (character.isBoss !== target.isBoss);
+                } else {
+                    isValidTarget = (target !== character);
+                }
 
-                    if (dist < hitRange) { // Only apply if within a close range
+                if (target.isAlive && isValidTarget && !target.isPhasing && !character.secondaryAbilityEffect.targetsHit.includes(target.name)) {
+                    const dist = checkDistance({x: character.x, y: character.y, width: character.width, height: character.height}, target);
+                    const hitRange = character.width * 0.7;
+
+                    if (dist < hitRange) {
                         const damage = 20 + character.attack * 0.8;
                         target.takeDamage(damage, character.attack, character.name, allCharacters);
                         character.damageDealt += damage;
@@ -347,7 +368,14 @@ function updateHoneyCombProjectile(queenBee, allCharacters, CHARACTER_SCALE_FACT
     }
 
     for (const target of allCharacters) {
-        if (target !== queenBee && target.isAlive && !target.isPhasing && !target.isStunned) {
+        let isValidTarget = false;
+        if (IS_BOSS_MODE.ENABLED) {
+            isValidTarget = (queenBee.isBoss !== target.isBoss); // Queen Bee (player) stuns boss. Boss (if Queen Bee) stuns players.
+        } else {
+            isValidTarget = (target !== queenBee); // Stuns anyone but self
+        }
+
+        if (target.isAlive && !target.isPhasing && !target.isStunned && isValidTarget) {
             const dist = checkDistance({x: projectile.x, y: projectile.y, width: projectile.radius * 2, height: projectile.radius * 2}, target);
             if (dist < target.width / 2 + projectile.radius) {
                 target.isStunned = true;
