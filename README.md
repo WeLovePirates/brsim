@@ -13,7 +13,7 @@ BRSim is a lightweight, browser-based simulation showcasing a dynamic battle roy
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/kitten99/br
+    git clone https://github.com/kitten99/brsim
     ```
 2.  **Navigate to the Project Directory:**
     ```bash
