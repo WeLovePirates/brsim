@@ -1,4 +1,4 @@
-// js/game/gameLoop.js
+// br/js/game/gameLoop.js
 
 import { PROB_UPDATE_INTERVAL, ORIGINAL_SPEED_MAGNITUDE } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
@@ -9,7 +9,7 @@ import {
     addSummaryEventListeners,
     removeSummaryEventListeners,
 } from '../ui/uiUpdates.js';
-import { drawProbabilityMenu, drawMessageBox, drawButton } from '../ui/uiRenderer.js'; // UPDATED Import
+import { drawProbabilityMenu, drawMessageBox, drawButton } from '../ui/uiRenderer.js';
 import { calculateWinProbabilities, handleCollisions, applyStaticFieldDamage, handleShurikenCollisions } from './gameLogic.js';
 import { showMatchCreationMenu, drawMatchCreationMenu, handleMatchCreationClick, matchCreationState } from './matchCreation.js';
 import { getCharacters, setCharacters } from './gameInit.js';
@@ -17,8 +17,8 @@ import { getCharacters, setCharacters } from './gameInit.js';
 let characters = []; // Initialized by setGameLoopDependencies
 let animationFrameId; // Stores the ID returned by requestAnimationFrame
 let gameRunning = false;
-let gameStartTime; // Re-added: Needed for game duration calculation in summary
-let gameEndTime; // Re-added: Needed for game duration calculation in summary
+let gameStartTime; // Needed for game duration calculation in summary
+let gameEndTime; // Needed for game duration calculation in summary
 let lastProbUpdateTime = 0;
 let mapImage;
 let ctx;
@@ -30,6 +30,13 @@ let cachedProbabilities = [];
 const MS_PER_UPDATE = 1000 / 60; // Target 60 game logic updates per second (16.67ms per update)
 let lastFrameTimeMs = 0; // The last time `requestAnimationFrame` was called (high-resolution timestamp)
 let deltaTime = 0; // Accumulator for how much time has passed since the last game logic update
+
+// --- FPS Counter Variables ---
+let fps = 0;
+let frameCount = 0;
+let lastFpsUpdateTime = 0;
+const FPS_UPDATE_INTERVAL_MS = 1000; // Update FPS display every 1 second
+let showFpsCounter = false; // NEW: State variable to control FPS counter visibility
 
 // Variables for in-canvas buttons
 const menuButtons = {
@@ -90,17 +97,17 @@ export function setGameLoopDependencies(gameCanvas, context, initialCharacters, 
     document.addEventListener('keydown', (event) => {
         if (event.key === 'f' || event.key === 'F') {
             toggleFullscreen();
-        }
-    });
-
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'p' || event.key === 'P') {
+        } else if (event.key === 'p' || event.key === 'P') { // Existing 'P' keybind
             if (currentScreen === 'game') {
-                if (drawProbabilityMenu.isVisible()) { // UPDATED call
-                    drawProbabilityMenu.hide(); // UPDATED call
+                if (drawProbabilityMenu.isVisible()) {
+                    drawProbabilityMenu.hide();
                 } else {
-                    drawProbabilityMenu.show(); // UPDATED call
+                    drawProbabilityMenu.show();
                 }
+            }
+        } else if (event.key === 'i' || event.key === 'I') { // NEW: 'I' keybind for FPS toggle
+            if (currentScreen === 'game') { // Only allow in game screen
+                showFpsCounter = !showFpsCounter;
             }
         }
     });
@@ -243,11 +250,22 @@ function updateGameLogic() {
 export function gameLoop(timestamp) {
     animationFrameId = requestAnimationFrame(gameLoop);
 
+    // --- FPS Calculation ---
+    frameCount++;
+    if (timestamp - lastFpsUpdateTime >= FPS_UPDATE_INTERVAL_MS) {
+        fps = Math.round(frameCount / ((timestamp - lastFpsUpdateTime) / 1000));
+        frameCount = 0;
+        lastFpsUpdateTime = timestamp;
+    }
+    // --- End FPS Calculation ---
+
     if (lastFrameTimeMs === 0) lastFrameTimeMs = timestamp;
     deltaTime += timestamp - lastFrameTimeMs;
     lastFrameTimeMs = timestamp;
 
-    if (deltaTime > MS_PER_UPDATE * 10) {
+    // Cap deltaTime to prevent "spiral of death" in extremely slow frames
+    // This ensures game logic doesn't try to catch up infinitely
+    if (deltaTime > MS_PER_UPDATE * 10) { // Allows catching up to 10 logical frames
         deltaTime = MS_PER_UPDATE * 10;
     }
 
@@ -275,8 +293,22 @@ export function gameLoop(timestamp) {
         characters = getCharacters();
         characters.forEach(char => char.draw(CHARACTER_SCALE_FACTOR));
 
-        drawProbabilityMenu(ctx, canvas, cachedProbabilities, CHARACTER_SCALE_FACTOR); // UPDATED call
-        drawMessageBox(ctx, canvas, displayMessage.currentMessage, CHARACTER_SCALE_FACTOR); // UPDATED call
+        drawProbabilityMenu(ctx, canvas, cachedProbabilities, CHARACTER_SCALE_FACTOR);
+        drawMessageBox(ctx, canvas, displayMessage.currentMessage, CHARACTER_SCALE_FACTOR);
+
+        // --- Draw FPS Display (only if showFpsCounter is true) ---
+        if (showFpsCounter) { // NEW: Conditional drawing
+            ctx.font = `${12 * CHARACTER_SCALE_FACTOR}px 'Press Start 2P'`;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2 * CHARACTER_SCALE_FACTOR;
+            ctx.fillStyle = '#00A000'; // Darker green
+
+            ctx.strokeText(`FPS: ${fps}`, 10 * CHARACTER_SCALE_FACTOR, 10 * CHARACTER_SCALE_FACTOR);
+            ctx.fillText(`FPS: ${fps}`, 10 * CHARACTER_SCALE_FACTOR, 10 * CHARACTER_SCALE_FACTOR);
+        }
+        // --- End FPS Display ---
 
     } else if (currentScreen === 'summary') {
         displayGameSummary(characters, gameStartTime, gameEndTime, canvas, ctx, playAgainButton);
@@ -328,7 +360,9 @@ export async function startGame(requestFullscreenOnStart) {
     gameStartTime = performance.now(); // Re-initialized for each new game
 
     deltaTime = 0;
-    lastFrameTimeMs = performance.now();
+    lastFrameTimeMs = performance.now(); // Reset for a clean start to delta time calculation
+    lastFpsUpdateTime = performance.now(); // Reset FPS timer
+    frameCount = 0; // Reset FPS frame count
 
     characters.forEach(char => {
         char.health = char.maxHealth;
