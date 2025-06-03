@@ -26,6 +26,8 @@ import { displayMessage } from '../utils/displayUtils.js';
 import { checkDistance } from '../utils/mathUtils.js';
 import { handleSpecialMove, updateMoveEffect } from './characterMoves.js';
 import { handleSecondaryAbility, updateAbilityEffect } from './characterAbilities.js';
+import { drawMoveVisuals } from '../visuals/moveVisuals.js';       // NEW Import
+import { drawAbilityVisuals } from '../visuals/abilityVisuals.js';   // NEW Import
 
 export class Character {
     constructor(name, image, moveType, attack, defense, speed, scaleFactor, initialHealthOverride = INITIAL_HEALTH, secondaryAbilityType, secondaryAbilityCooldown, canvas) {
@@ -510,53 +512,20 @@ export class Character {
 
         this.ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
 
-        // Draw stuck indicator
-        // Condition: Character is stunned AND it was stunned by honeycomb_stick effect
-        // Note: The original 'draw stuck indicator' was drawing a fillRect.
-        // The more recent version you provided has a slightly different visual.
-        // I will use the code you provided in the last Character.js for consistency.
-        if (this.isStunned && this.secondaryAbilityActive && this.secondaryAbilityEffect) {
-            if (this.secondaryAbilityEffect.type === 'honeycomb_stick') {
-                this.ctx.fillStyle = 'rgba(255, 165, 0, 0.3)'; // Orange translucent for Honeycomb
-            } else if (this.secondaryAbilityEffect.type === 'volatile_concoction_stun') {
-                this.ctx.fillStyle = 'rgba(128, 0, 128, 0.3)'; // Purple translucent for Alchemist stun
-            }
-            this.ctx.fillRect(this.x, this.y, this.width, this.height);
-        }
-
-        // Draw bleed indicator (Re-added for Fin Slice)
-        if (this.isBleeding) {
-            this.ctx.strokeStyle = 'red';
-            this.ctx.lineWidth = 2 * CHARACTER_SCALE_FACTOR;
-            this.ctx.beginPath();
-            this.ctx.rect(this.x, this.y, this.width, this.height); // Draw a red border
-            this.ctx.stroke();
-            this.ctx.lineWidth = 1; // Reset line width
-        }
-
-        // NEW: Draw healing over time indicator (for Alchemist's Elixir of Fortitude)
-        if (this.isHealingOverTime) {
-            this.ctx.strokeStyle = 'lime'; // Green border
-            this.ctx.lineWidth = 3 * CHARACTER_SCALE_FACTOR;
-            this.ctx.beginPath();
-            this.ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.width / 2 + 8 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.lineWidth = 1;
-        }
-
-        // NEW: Draw Fortify indicator (Tank)
-        if (this.buffs['fortify_defense_boost']) {
-            this.ctx.strokeStyle = 'saddlebrown';
-            this.ctx.lineWidth = 4 * CHARACTER_SCALE_FACTOR;
-            this.ctx.beginPath();
-            this.ctx.rect(this.x - 2, this.y - 2, this.width + 4, this.height + 4); // Slightly larger border
-            this.ctx.stroke();
-            this.ctx.lineWidth = 1;
-        }
-
-        // Reset alpha for drawing UI elements like health bar and name
+        // Restore alpha to default before drawing UI elements or other effects
         this.ctx.globalAlpha = this.originalAlpha;
 
+        // Delegate drawing of move effects to moveVisuals.js
+        if (this.moveActive && this.moveEffect) {
+            drawMoveVisuals(this.ctx, this, CHARACTER_SCALE_FACTOR);
+        }
+
+        // Delegate drawing of secondary ability effects to abilityVisuals.js
+        if (this.secondaryAbilityActive && this.secondaryAbilityEffect) {
+            drawAbilityVisuals(this.ctx, this, CHARACTER_SCALE_FACTOR);
+        }
+
+        // Draw basic health bar and name directly within Character.js
         const healthBarWidth = this.width;
         const healthBarHeight = 5 * CHARACTER_SCALE_FACTOR;
         const healthBarY = this.y + this.height + 5 * CHARACTER_SCALE_FACTOR;
@@ -573,256 +542,7 @@ export class Character {
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'alphabetic';
 
-        // MODIFICATION HERE: Add health to the name string
-        const displayName = `${this.name} (${Math.ceil(this.health)})`; // Round health up for display
+        const displayName = `${this.name} (${Math.ceil(this.health)})`;
         this.ctx.fillText(displayName, this.x + this.width / 2, this.y - (5 * CHARACTER_SCALE_FACTOR));
-
-        // Draw move effects
-        if (this.moveActive && this.moveEffect) {
-            this.ctx.globalAlpha = this.originalAlpha; // Start with default for effects
-
-            if (this.moveType === 'confetti') {
-                this.ctx.save();
-                this.ctx.globalAlpha = 0.6;
-                this.moveEffect.particles.forEach(p => {
-                    this.ctx.fillStyle = p.color;
-                    this.ctx.globalAlpha = p.alpha;
-                    this.ctx.fillRect(p.x, p.y, 8 * CHARACTER_SCALE_FACTOR, 8 * CHARACTER_SCALE_FACTOR);
-                });
-                this.ctx.restore();
-            } else if (this.moveType === 'quickdraw') {
-                if (this.moveEffect.type === 'quickdraw_projectile') {
-                    this.ctx.save();
-                    this.ctx.translate(this.moveEffect.x, this.moveEffect.y);
-                    this.ctx.rotate(this.moveEffect.angle);
-                    this.ctx.fillStyle = 'orange';
-                    this.ctx.fillRect(-this.moveEffect.beamLength / 2, -this.moveEffect.beamWidth / 2,
-                                      this.moveEffect.beamLength, this.moveEffect.beamWidth);
-                    this.ctx.restore();
-                }
-            } else if (this.moveType === 'staticshock') {
-                this.ctx.strokeStyle = 'yellow';
-                this.ctx.lineWidth = 4 * CHARACTER_SCALE_FACTOR;
-                this.ctx.beginPath();
-                this.ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.moveEffect.radius, 0, Math.PI * 2);
-                this.ctx.stroke();
-                this.ctx.lineWidth = 1;
-            } else if (this.moveType === 'baguette') {
-                const armLength = this.width * 1.0;
-                const startX = this.x + this.width / 2;
-                const startY = this.y + this.height / 2;
-                const endX = startX + armLength * Math.cos(this.moveEffect.angle);
-                const endY = startY + armLength * Math.sin(this.moveEffect.angle);
-
-                this.ctx.strokeStyle = 'brown';
-                this.ctx.lineWidth = 8 * CHARACTER_SCALE_FACTOR;
-                this.ctx.beginPath();
-                this.ctx.moveTo(startX, startY);
-                this.ctx.lineTo(endX, endY);
-                this.ctx.stroke();
-                this.ctx.lineWidth = 1;
-            } else if (this.moveType === 'patch') {
-                this.ctx.globalAlpha = this.moveEffect.alpha;
-                this.ctx.fillStyle = 'lightgreen';
-                this.ctx.font = `${30 * CHARACTER_SCALE_FACTOR}px Inter`;
-                this.ctx.textAlign = 'center';
-                this.ctx.fillText('+', this.x + this.width / 2, this.y + this.height / 2 + 5 * CHARACTER_SCALE_FACTOR);
-                this.ctx.globalAlpha = this.originalAlpha;
-            } else if (this.moveType === 'shuriken') {
-                this.ctx.fillStyle = 'gray';
-                this.ctx.beginPath();
-                this.ctx.arc(this.moveEffect.x, this.moveEffect.y, 8 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
-                this.ctx.fill();
-            } else if (this.moveType === 'fireball') {
-                if (this.moveEffect.type === 'fireball_projectile') {
-                    this.ctx.fillStyle = `rgba(255, 100, 0, ${this.moveEffect.alpha})`;
-                    this.ctx.beginPath();
-                    this.ctx.arc(this.moveEffect.x, this.moveEffect.y, this.moveEffect.radius, 0, Math.PI * 2);
-                    this.ctx.fill();
-                } else if (this.moveEffect.type === 'fireball_explosion') {
-                    this.ctx.save();
-                    this.ctx.globalAlpha = this.moveEffect.alpha;
-                    this.ctx.fillStyle = 'rgba(255, 100, 0, 0.7)';
-                    this.ctx.beginPath();
-                    this.ctx.arc(this.moveEffect.x, this.moveEffect.y, this.moveEffect.radius, 0, Math.PI * 2);
-                    this.ctx.fill();
-                    this.ctx.restore();
-                }
-            } else if (this.moveType === 'charge') {
-                this.ctx.strokeStyle = 'blue';
-                this.ctx.lineWidth = 3 * CHARACTER_SCALE_FACTOR;
-                this.ctx.beginPath();
-                this.ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.width / 2 + 5 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
-                this.ctx.stroke();
-            } else if (this.moveType === 'boo') {
-                if (this.moveEffect && this.moveEffect.type === 'boo_effect' && this.moveEffect.duration > 0) {
-                    this.ctx.save();
-                    this.ctx.globalAlpha = 0.4 * (this.moveEffect.duration / 30);
-                    this.ctx.fillStyle = 'rgba(200, 200, 255, 0.5)';
-                    this.ctx.beginPath();
-                    this.ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.moveEffect.radius, 0, Math.PI * 2);
-                    this.ctx.fill();
-                    this.ctx.restore();
-                }
-            } else if (this.moveType === 'swarm') { // Draw mini bees for swarm
-                if (this.moveEffect && this.moveEffect.type === 'swarm') {
-                    this.moveEffect.bees.forEach(bee => {
-                        if (bee.image.complete && bee.image.naturalWidth > 0) {
-                            this.ctx.save();
-                            this.ctx.globalAlpha = 0.8; // Bees are slightly transparent
-                            this.ctx.drawImage(bee.image, bee.x, bee.y, bee.size, bee.size);
-                            this.ctx.restore();
-                        }
-                    });
-                }
-            }
-            // Re-added Visual for Feeding Frenzy here
-            else if (this.moveType === 'feeding_frenzy') {
-                if (this.moveEffect && this.moveEffect.type === 'feeding_frenzy' && this.moveEffect.duration > 0) {
-                    const frenzyAlpha = this.moveEffect.duration / FEEDING_FRENZY_DURATION_FRAMES;
-                    this.ctx.strokeStyle = `rgba(255, 0, 0, ${frenzyAlpha * 0.8})`;
-                    this.ctx.lineWidth = 5 * CHARACTER_SCALE_FACTOR;
-                    this.ctx.beginPath();
-                    this.ctx.arc(this.x + this.width / 2, this.y + this.height / 2, this.width / 2 + 5 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
-                    this.ctx.stroke();
-                    this.ctx.lineWidth = 1;
-                }
-            }
-            // NEW: Alchemist Volatile Concoction projectile visual
-            else if (this.moveType === 'volatile_concoction') {
-                if (this.moveEffect.type === 'volatile_projectile') {
-                    this.ctx.fillStyle = this.moveEffect.color; // Color determined by effect type
-                    this.ctx.beginPath();
-                    this.ctx.arc(this.moveEffect.x, this.moveEffect.y, this.moveEffect.radius, 0, Math.PI * 2);
-                    this.ctx.fill();
-                } else if (this.moveEffect.type === 'volatile_explosion') {
-                    this.ctx.save();
-                    this.ctx.globalAlpha = this.moveEffect.alpha;
-                    this.ctx.fillStyle = this.moveEffect.color;
-                    this.ctx.beginPath();
-                    // THIS IS THE LINE THAT WAS CHANGED for splash accuracy
-                    this.ctx.arc(this.moveEffect.x, this.moveEffect.y, this.moveEffect.radius, 0, Math.PI * 2);
-                    this.ctx.fill();
-                    this.ctx.restore();
-                }
-            }
-        }
-
-        // Draw secondary ability effects
-        if (this.secondaryAbilityActive && this.secondaryAbilityEffect) {
-            const centerX = this.x + this.width / 2;
-            const centerY = this.y + this.height / 2;
-            // Use the remaining duration of the effect to calculate alpha for fade out
-            const totalAbilityDurationFrames = SECONDARY_ABILITY_DURATION_FRAMES; // Assuming this is typical
-            let currentAlpha = 0;
-            if (this.secondaryAbilityEffect.type === 'honeycomb_projectile') {
-                currentAlpha = 0.7; // Projectile is consistently opaque
-            }
-            // Re-added Fin Slice visual alpha calculation here
-            else if (this.secondaryAbilityEffect.type === 'fin_slice') {
-                const slashDuration = 15; // Hardcoded visual duration from characterAbilities.js
-                currentAlpha = (this.secondaryAbilityEffect.duration / slashDuration);
-                if (currentAlpha < 0) currentAlpha = 0;
-
-                this.ctx.save();
-                this.ctx.globalAlpha = currentAlpha;
-                this.ctx.strokeStyle = 'red';
-                this.ctx.lineWidth = 5 * CHARACTER_SCALE_FACTOR;
-
-                const armLength = this.width * 1.5;
-                const startX = centerX;
-                const startY = centerY;
-                const endX = startX + armLength * Math.cos(this.secondaryAbilityEffect.angle);
-                const endY = startY + armLength * Math.sin(this.secondaryAbilityEffect.angle);
-
-                this.ctx.beginPath();
-                this.ctx.moveTo(startX, startY);
-                this.ctx.lineTo(endX, endY);
-                this.ctx.stroke();
-                this.ctx.restore();
-            }
-            // Add other secondary ability drawing logic here based on type
-            else if (this.secondaryAbilityEffect.type === 'slippery_floor') {
-                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
-                this.ctx.save();
-                this.ctx.globalAlpha = currentAlpha * 0.4;
-                this.ctx.fillStyle = 'blue';
-                this.ctx.beginPath();
-                this.ctx.arc(centerX, centerY, this.secondaryAbilityEffect.radius, 0, Math.PI * 2);
-                this.ctx.fill();
-                this.ctx.restore();
-            } else if (this.secondaryAbilityEffect.type === 'iron_skin') {
-                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
-                this.ctx.save();
-                this.ctx.globalAlpha = currentAlpha * 0.3;
-                this.ctx.fillStyle = 'gray';
-                this.ctx.beginPath();
-                this.ctx.arc(centerX, centerY, this.width / 2 + 5 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
-                this.ctx.fill();
-                this.ctx.restore();
-            } else if (this.secondaryAbilityEffect.type === 'spur_of_moment') {
-                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
-                this.ctx.save();
-                this.ctx.globalAlpha = currentAlpha * 0.5;
-                this.ctx.strokeStyle = 'cyan';
-                this.ctx.lineWidth = 3 * CHARACTER_SCALE_FACTOR;
-                this.ctx.beginPath();
-                this.ctx.arc(centerX, centerY, this.width / 2 + 10 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
-                this.ctx.stroke();
-                this.ctx.restore();
-            } else if (this.secondaryAbilityEffect.type === 'static_field') {
-                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
-                this.ctx.save();
-                this.ctx.globalAlpha = currentAlpha * 0.5;
-                this.ctx.strokeStyle = 'lime';
-                this.ctx.lineWidth = 4 * CHARACTER_SCALE_FACTOR;
-                this.ctx.beginPath();
-                this.ctx.arc(centerX, centerY, this.secondaryAbilityEffect.radius, 0, Math.PI * 2);
-                this.ctx.stroke();
-                this.ctx.restore();
-            } else if (this.secondaryAbilityEffect.type === 'adrenaline_shot') {
-                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
-                this.ctx.save();
-                this.ctx.globalAlpha = currentAlpha * 0.7;
-                this.ctx.fillStyle = 'orange';
-                this.ctx.beginPath();
-                this.ctx.arc(centerX, centerY, this.width / 4, 0, Math.PI * 2);
-                this.ctx.fill();
-                this.ctx.restore();
-            } else if (this.secondaryAbilityEffect.type === 'smoke_bomb') {
-                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
-                this.ctx.save();
-                this.ctx.globalAlpha = currentAlpha * 0.4;
-                this.ctx.fillStyle = 'darkgray';
-                this.ctx.beginPath();
-                this.ctx.arc(centerX, centerY, this.secondaryAbilityEffect.radius, 0, Math.PI * 2);
-                this.ctx.fill();
-                this.ctx.restore();
-            } else if (this.secondaryAbilityEffect.type === 'magic_shield') {
-                // NEW: Visual for Magic Shield to clearly indicate active status
-                currentAlpha = (this.secondaryAbilityEffect.duration / WIZARD_MAGIC_SHIELD_DURATION_FRAMES);
-                this.ctx.save();
-                this.ctx.globalAlpha = currentAlpha * 0.6;
-                this.ctx.strokeStyle = 'lightblue';
-                this.ctx.lineWidth = 5 * CHARACTER_SCALE_FACTOR;
-                this.ctx.beginPath();
-                this.ctx.arc(centerX, centerY, this.width / 2 + 5 * CHARACTER_SCALE_FACTOR, 0, Math.PI * 2);
-                this.ctx.stroke();
-                this.ctx.restore();
-            } else if (this.secondaryAbilityEffect.type === 'fortify') {
-                currentAlpha = (this.secondaryAbilityEffect.duration / totalAbilityDurationFrames);
-                this.ctx.save();
-                this.ctx.globalAlpha = currentAlpha * 0.4;
-                this.ctx.fillStyle = 'saddlebrown';
-                this.ctx.fillRect(this.x, this.y, this.width, this.height);
-                this.ctx.restore();
-            } else if (this.secondaryAbilityEffect.type === 'phase') {
-                // Phasing alpha is handled at the beginning of draw()
-            } else if (this.secondaryAbilityEffect.type === 'invisibility') {
-                // Invisibility alpha is handled at the beginning of draw()
-            } else if (this.secondaryAbilityEffect.type === 'elixir_of_fortitude') {
-                // The healing effect is drawn by isHealingOverTime property
-            }
-        }
     }
 }

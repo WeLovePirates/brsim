@@ -5,13 +5,11 @@ import { displayMessage } from '../utils/displayUtils.js';
 import {
     updateCanvasSize,
     CHARACTER_SCALE_FACTOR,
-    drawProbabilityMenu,
-    drawMessageBox,
     displayGameSummary,
     addSummaryEventListeners,
     removeSummaryEventListeners,
-    drawButton // Import drawButton
 } from '../ui/uiUpdates.js';
+import { drawProbabilityMenu, drawMessageBox, drawButton } from '../ui/uiRenderer.js'; // UPDATED Import
 import { calculateWinProbabilities, handleCollisions, applyStaticFieldDamage, handleShurikenCollisions } from './gameLogic.js';
 import { showMatchCreationMenu, drawMatchCreationMenu, handleMatchCreationClick, matchCreationState } from './matchCreation.js';
 import { getCharacters, setCharacters } from './gameInit.js';
@@ -98,10 +96,10 @@ export function setGameLoopDependencies(gameCanvas, context, initialCharacters, 
     document.addEventListener('keydown', (event) => {
         if (event.key === 'p' || event.key === 'P') {
             if (currentScreen === 'game') {
-                if (drawProbabilityMenu.isVisible) {
-                    drawProbabilityMenu.hide();
+                if (drawProbabilityMenu.isVisible()) { // UPDATED call
+                    drawProbabilityMenu.hide(); // UPDATED call
                 } else {
-                    drawProbabilityMenu.show();
+                    drawProbabilityMenu.show(); // UPDATED call
                 }
             }
         }
@@ -277,8 +275,8 @@ export function gameLoop(timestamp) {
         characters = getCharacters();
         characters.forEach(char => char.draw(CHARACTER_SCALE_FACTOR));
 
-        drawProbabilityMenu(ctx, canvas, cachedProbabilities, CHARACTER_SCALE_FACTOR);
-        drawMessageBox(ctx, canvas, displayMessage.currentMessage, CHARACTER_SCALE_FACTOR);
+        drawProbabilityMenu(ctx, canvas, cachedProbabilities, CHARACTER_SCALE_FACTOR); // UPDATED call
+        drawMessageBox(ctx, canvas, displayMessage.currentMessage, CHARACTER_SCALE_FACTOR); // UPDATED call
 
     } else if (currentScreen === 'summary') {
         displayGameSummary(characters, gameStartTime, gameEndTime, canvas, ctx, playAgainButton);

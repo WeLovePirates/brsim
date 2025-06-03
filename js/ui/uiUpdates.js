@@ -3,12 +3,14 @@
 import { REFERENCE_GAME_WIDTH } from '../config.js';
 import { displayMessage } from '../utils/displayUtils.js';
 // Import the shared button object and the resetGame/showMainMenu functions from gameLoop.js
-import { playAgainButton, resetGame, showMainMenu } from '../game/gameLoop.js'; 
+import { playAgainButton, resetGame, showMainMenu } from '../game/gameLoop.js';
+import { drawProbabilityMenu, drawMessageBox, drawButton } from './uiRenderer.js'; // NEW Import from uiRenderer.js
 
 export let CHARACTER_SCALE_FACTOR = 1;
 
 let _calculateWinProbabilities = null;
-let probabilityMenuVisible = true; // State for probability menu visibility
+// probabilityMenuVisible state is now managed by uiRenderer.js
+// let probabilityMenuVisible = true;
 
 // For in-canvas scrolling, these need to persist between frames
 let summaryScrollYOffset = 0;
@@ -42,7 +44,7 @@ function handleSummaryMouseDown(event) {
     const summaryBoxX = (canvas.width - summaryBoxWidth) / 2;
     const summaryBoxY = 180 * CHARACTER_SCALE_FACTOR;
 
-    if (event.clientX >= summaryBoxX && event.clientX <= summaryBoxX + summaryBoxWidth &&
+    if (event.clientX >= summaryBoxX && clickX <= summaryBoxX + summaryBoxWidth &&
         event.clientY >= summaryBoxY && event.clientY <= summaryBoxY + summaryBoxHeight) {
         isDraggingSummary = true;
         lastMouseY = event.clientY;
@@ -81,7 +83,7 @@ function handlePlayAgainClick(event) {
 
     // Check if the click was within the "Play Again" button's drawn area
     if (clickX >= playAgainButton.currentX && clickX <= playAgainButton.currentX + playAgainButton.currentWidth &&
-        clickY >= playAgainButton.currentY && clickY <= playAgainButton.currentY + playAgainButton.currentHeight) {
+        clickY >= playAgainButton.y && clickY <= playAgainButton.y + playAgainButton.currentHeight) { // FIX: Use playAgainButton.y instead of playAgainButton.currentY which is not tracked
         resetGame(); // Call resetGame which will then call showMainMenu
     }
 }
@@ -189,131 +191,6 @@ export function updateCanvasSize(canvas, isFullScreen = false) {
     if (CHARACTER_SCALE_FACTOR > 2) CHARACTER_SCALE_FACTOR = 2;
 }
 
-/**
- * Draws the win probability menu on the canvas.
- * @param {CanvasRenderingContext2D} ctx - The 2D rendering context.
- * @param {HTMLCanvasElement} canvas - The game canvas.
- * @param {Array<object>} probabilities - An array of objects with character name and win probability.
- * @param {number} scaleFactor - The current character scale factor.
- */
-export function drawProbabilityMenu(ctx, canvas, probabilities, scaleFactor) {
-    if (!probabilityMenuVisible) return;
-
-    const padding = 10 * scaleFactor;
-    const lineHeight = 20 * scaleFactor;
-    const titleHeight = 25 * scaleFactor;
-    const minHeight = 50 * scaleFactor; // Minimum height for the box
-
-    const numPlayers = probabilities.length;
-    let requiredContentHeight = titleHeight + (numPlayers * lineHeight);
-    if (numPlayers === 0) requiredContentHeight += lineHeight; // For "No active players" message
-    else if (numPlayers === 1) requiredContentHeight += lineHeight; // For "X wins!" message
-
-    const menuHeight = Math.max(minHeight, requiredContentHeight + padding * 2);
-    const menuWidth = 180 * scaleFactor; // Fixed width for simplicity
-
-    const menuX = canvas.width - menuWidth - padding;
-    const menuY = padding;
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.fillRect(menuX, menuY, menuWidth, menuHeight);
-
-    ctx.strokeStyle = '#4a5568';
-    ctx.lineWidth = 2 * scaleFactor;
-    ctx.strokeRect(menuX, menuY, menuWidth, menuHeight);
-
-    ctx.font = `${16 * scaleFactor}px 'Inter', sans-serif`;
-    ctx.fillStyle = '#e2e8f0';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText('Win Probabilities:', menuX + padding, menuY + padding);
-
-    let currentY = menuY + titleHeight + padding;
-
-    if (probabilities.length === 0) {
-        ctx.font = `${12 * scaleFactor}px 'Inter', sans-serif`;
-        ctx.fillStyle = '#ccc';
-        ctx.fillText('No active players.', menuX + padding, currentY);
-    } else if (probabilities.length === 1) {
-        ctx.font = `${14 * scaleFactor}px 'Inter', sans-serif`;
-        ctx.fillStyle = '#22c55e';
-        ctx.fillText(`${probabilities[0].name}: 100.0%`, menuX + padding, currentY);
-    } else {
-        probabilities.sort((a, b) => b.probability - a.probability);
-
-        probabilities.forEach(probData => {
-            ctx.font = `${12 * scaleFactor}px 'Inter', sans-serif`;
-            ctx.fillStyle = '#cbd5e0';
-            ctx.fillText(`${probData.name}: ${probData.probability.toFixed(1)}%`, menuX + padding, currentY);
-            currentY += lineHeight;
-        });
-    }
-}
-
-drawProbabilityMenu.isVisible = probabilityMenuVisible;
-drawProbabilityMenu.show = () => { probabilityMenuVisible = true; drawProbabilityMenu.isVisible = true; };
-drawProbabilityMenu.hide = () => { probabilityMenuVisible = false; drawProbabilityMenu.isVisible = false; };
-
-
-/**
- * Draws the message box on the canvas.
- * @param {CanvasRenderingContext2D} ctx - The 2D rendering context.
- * @param {HTMLCanvasElement} canvas - The game canvas.
- * @param {string} message - The message to display.
- * @param {number} scaleFactor - The current character scale factor.
- */
-export function drawMessageBox(ctx, canvas, message, scaleFactor) {
-    if (!message) return;
-
-    const boxWidth = 400 * scaleFactor;
-    const boxHeight = 40 * scaleFactor;
-    const boxX = (canvas.width / 2) - (boxWidth / 2);
-    const boxY = 10 * scaleFactor;
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-
-    ctx.strokeStyle = '#4a5568';
-    ctx.lineWidth = 2 * scaleFactor;
-    ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
-
-    ctx.font = `${16 * scaleFactor}px 'Inter', sans-serif`;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(message, boxX + (boxWidth / 2), boxY + (boxHeight / 2));
-}
-
-/**
- * Draws a button on the canvas.
- * @param {CanvasRenderingContext2D} ctx - The 2D rendering context.
- * @param {object} button - Button configuration. Must include x, y, width, height, text.
- * @param {number} scaleFactor - The current character scale factor.
- */
-export function drawButton(ctx, button, scaleFactor) { // Changed to export
-    const scaledWidth = button.width * scaleFactor;
-    const scaledHeight = button.height * scaleFactor;
-    const scaledX = button.x;
-    const scaledY = button.y;
-
-    ctx.fillStyle = '#1a202c';
-    ctx.fillRect(scaledX, scaledY, scaledWidth, scaledHeight);
-
-    ctx.strokeStyle = '#4a5568';
-    ctx.lineWidth = 2 * scaleFactor;
-    ctx.strokeRect(scaledX, scaledY, scaledWidth, scaledHeight);
-
-    ctx.fillStyle = '#e2e8f0';
-    ctx.font = `${20 * scaleFactor}px 'Inter', sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(button.text, scaledX + scaledWidth / 2, scaledY + scaledHeight / 2);
-
-    button.currentX = scaledX;
-    button.currentY = scaledY;
-    button.currentWidth = scaledWidth;
-    button.currentHeight = scaledHeight;
-}
 
 /**
  * Displays the game summary overlay with character statistics directly on the canvas.
