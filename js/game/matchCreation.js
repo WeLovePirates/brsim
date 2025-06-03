@@ -1,8 +1,9 @@
 // js/game/matchCreation.js
 
-import { CHARACTER_SCALE_FACTOR, drawButton } from '../ui/uiUpdates.js'; // Imports remain
-import { setCharacters } from './gameInit.js'; // Imports remain
-import { startGame, showMainMenu } from './gameLoop.js'; // Imports remain
+import { CHARACTER_SCALE_FACTOR } from '../ui/uiUpdates.js';
+import { drawButton } from '../ui/uiRenderer.js'; // UPDATED Import
+import { setCharacters } from './gameInit.js';
+import { startGame, showMainMenu } from './gameLoop.js';
 
 // State for the match creation menu
 export const matchCreationState = {
